@@ -16,8 +16,3 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/process_snapshot"
 )
 
-# Create a simple configuration header
-configure_file(config.h.in config.h)
-
-# Include the configuration header in the build
-target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_BINARY_DIR}")

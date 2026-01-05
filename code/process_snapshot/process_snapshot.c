@@ -200,7 +200,6 @@ static int read_proc_stat(pid_t pid)
     if (ret != 5)
         return -1;
 
-    print_timestamp();
     log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS=%ld RSS(KB)=%ld ",
            pid, comm, state, ppid, utime, stime, rss, rssNice);
 
@@ -262,6 +261,9 @@ process_snapshot_status collect_snapshot(void)
 		return process_snapshot_error;
 	}
 
+	print_timestamp();
+	log_data(PSN_pfOutputFile," SNAPSHOT START ################# \n");
+
 	struct dirent *de;
 	while ((de = readdir(dir)) != NULL) {
 		if (de->d_type != DT_DIR)
@@ -280,6 +282,7 @@ process_snapshot_status collect_snapshot(void)
 	}
 
 	closedir(dir);
+	log_data(PSN_pfOutputFile,"SNAPSHOT END ################# \n");
 	return process_snapshot_success;
 }
 

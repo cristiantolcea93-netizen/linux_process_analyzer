@@ -12,6 +12,8 @@ add_executable(${PROJECT_NAME}
     args_parser/args_parser.c
 )
 
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
 # header include path
 target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/process_snapshot"

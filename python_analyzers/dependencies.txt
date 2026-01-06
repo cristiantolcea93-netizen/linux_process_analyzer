@@ -1,0 +1,3 @@
+#####################################rss_for_process.py
+matplotlib
+sudo apt-get install python3-matplotlib

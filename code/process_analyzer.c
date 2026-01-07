@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include "process_snapshot.h"
 #include "args_parser.h"
+#include "process_stats.h"
 
 
 static int getTimeFd(uint64_t interval_ms);
@@ -79,9 +80,8 @@ int main(int argc, char **argv)
 				}
 				noOfIterations++;
 			}
-
-
-
+			//print top 10 processes by CPU
+			process_stats_print_top_cpu(10);
 		}
 
 	}

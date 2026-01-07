@@ -10,6 +10,7 @@ add_executable(${PROJECT_NAME}
     process_analyzer.c
     process_snapshot/process_snapshot.c
     args_parser/args_parser.c
+    process_stats/process_stats.c
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -18,5 +19,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/process_snapshot"
     "${CMAKE_CURRENT_SOURCE_DIR}/args_parser"
+    "${CMAKE_CURRENT_SOURCE_DIR}/process_stats"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/uthash"
 )
 

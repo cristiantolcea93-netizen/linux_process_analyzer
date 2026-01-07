@@ -14,6 +14,7 @@
 #include <fcntl.h>
 
 #include "process_snapshot.h"
+#include "process_stats.h"
 
 #define PROC_PATH "/proc"
 
@@ -33,13 +34,14 @@ static FILE* PSN_pfOutputFile = NULL;
 static int g_lock_fd = -1;
 
 static void log_data(FILE* file, const char* fmt, ...);
-static void print_timestamp();
+static void print_timestamp(double *timestampInSeconds);
 static int is_numeric(const char *s);
-static int read_proc_stat(pid_t pid);
+static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
 static int read_proc_threads(pid_t pid);
 static process_snapshot_status make_log_dir(void);
 static off_t get_file_size(const char *path);
 static void rotate_logs(void);
+
 
 static process_snapshot_status acquire_lock(void)
 {
@@ -119,8 +121,7 @@ static void log_data(FILE* file, const char* fmt, ...)
 	}
 }
 
-
-static void print_timestamp()
+static void print_timestamp(double *timestampInSeconds)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts); // seconds + nanoseconds
@@ -131,6 +132,8 @@ static void print_timestamp()
     char buf[64];
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
     log_data(PSN_pfOutputFile,"[%s.%03ld] ", buf, ts.tv_nsec / 1000000); // milliseconds
+
+    *timestampInSeconds = (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
 static int is_numeric(const char *s)
@@ -142,7 +145,7 @@ static int is_numeric(const char *s)
     return 1;
 }
 
-static int read_proc_stat(pid_t pid)
+static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 {
     char path[64];
     char buf[1024];
@@ -168,16 +171,14 @@ static int read_proc_stat(pid_t pid)
     if (!lparen || !rparen)
         return -1;
 
-    char comm[64] = {0};
+    memset(&proc_data->comm, 0x00, sizeof(proc_data->comm));
     size_t len = rparen - lparen - 1;
-    if (len >= sizeof(comm))
-        len = sizeof(comm) - 1;
-    memcpy(comm, lparen + 1, len);
+    if (len >= sizeof(proc_data->comm))
+        len = sizeof(proc_data->comm) - 1;
+    memcpy(proc_data->comm, lparen + 1, len);
 
-    char state;
     pid_t ppid;
-    unsigned long utime, stime;
-    long rss, rssNice;
+    long rss;
 
     /*
      * Continue parsing AFTER ") "
@@ -188,20 +189,20 @@ static int read_proc_stat(pid_t pid)
         "%lu %lu "       /* utime, stime */
         "%*d %*d %*d %*d %*d %*d "
         "%ld",           /* rss */
-        &state,
+        &proc_data->state,//&state,
         &ppid,
-        &utime,
-        &stime,
+		&proc_data->utime,//&utime,
+		&proc_data->stime,//&stime,
         &rss
     );
 
-    rssNice = (rss * sysconf(_SC_PAGESIZE))/1024;
+    proc_data->rssKb = (rss * sysconf(_SC_PAGESIZE))/1024;
 
     if (ret != 5)
         return -1;
 
     log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS=%ld RSS(KB)=%ld ",
-           pid, comm, state, ppid, utime, stime, rss, rssNice);
+           pid, proc_data->comm, proc_data->state, ppid, proc_data->utime, proc_data->stime, rss, proc_data->rssKb);
 
     return 0;
 }
@@ -260,29 +261,34 @@ process_snapshot_status collect_snapshot(void)
 		perror("opendir /proc");
 		return process_snapshot_error;
 	}
+	process_state_input_t process_data;
 
-	print_timestamp();
+	print_timestamp(&process_data.timestamp_sec);
 	log_data(PSN_pfOutputFile," SNAPSHOT START ################# \n");
 
 	struct dirent *de;
 	while ((de = readdir(dir)) != NULL) {
+
 		if (de->d_type != DT_DIR)
 			continue;
 
 		if (!is_numeric(de->d_name))
 			continue;
 
-		pid_t pid = atoi(de->d_name);
+		process_data.pid = atoi(de->d_name);
 
-		if (read_proc_stat(pid) == 0) {
-			int threads = read_proc_threads(pid);
-			if (threads >= 0)
-				log_data(PSN_pfOutputFile,"THREADS=%d\n", threads);
+		if (read_proc_stat(process_data.pid,&process_data) == 0) {
+			process_data.threads = read_proc_threads(process_data.pid);
+			if (process_data.threads >= 0)
+				log_data(PSN_pfOutputFile,"THREADS=%d\n", process_data.threads);
 		}
+		//feed the data to process_stat
+		process_stats_update(&process_data);
 	}
 
 	closedir(dir);
 	log_data(PSN_pfOutputFile,"SNAPSHOT END ################# \n");
+	process_stats_snapshot_end();
 	return process_snapshot_success;
 }
 

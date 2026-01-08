@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 				noOfIterations++;
 			}
 			//print top 10 processes by CPU
-			process_stats_print_top_cpu(10);
+			process_stats_print_metrics(&(gArguments.end_metrics_args));
 		}
 
 	}

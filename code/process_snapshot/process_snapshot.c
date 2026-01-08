@@ -172,65 +172,62 @@ static int read_rss_status(pid_t pid, long *rss_kb)
 
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 {
-    char path[64];
-    char buf[1024];
+	char path[64];
+	char buf[1024];
 
-    snprintf(path, sizeof(path), PROC_PATH "/%d/stat", pid);
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return -1;
+	snprintf(path, sizeof(path), PROC_PATH "/%d/stat", pid);
+	FILE *f = fopen(path, "r");
+	if (!f)
+		return -1;
 
-    if (!fgets(buf, sizeof(buf), f)) {
-        fclose(f);
-        return -1;
-    }
-    fclose(f);
+	if (!fgets(buf, sizeof(buf), f)) {
+		fclose(f);
+		return -1;
+	}
+	fclose(f);
 
-    /*
-     * Format:
-     * pid (comm) state ppid ... utime stime ... rss
-     */
+	/*
+	 * Format:
+	 * pid (comm) state ppid ... utime stime ... rss
+	 */
 
-    char *lparen = strchr(buf, '(');
-    char *rparen = strrchr(buf, ')');
-    if (!lparen || !rparen)
-        return -1;
+	char *lparen = strchr(buf, '(');
+	char *rparen = strrchr(buf, ')');
+	if (!lparen || !rparen)
+		return -1;
 
-    memset(&proc_data->comm, 0x00, sizeof(proc_data->comm));
-    size_t len = rparen - lparen - 1;
-    if (len >= sizeof(proc_data->comm))
-        len = sizeof(proc_data->comm) - 1;
-    memcpy(proc_data->comm, lparen + 1, len);
+	memset(&proc_data->comm, 0x00, sizeof(proc_data->comm));
+	size_t len = rparen - lparen - 1;
+	if (len >= sizeof(proc_data->comm))
+		len = sizeof(proc_data->comm) - 1;
+	memcpy(proc_data->comm, lparen + 1, len);
 
-    pid_t ppid;
-    long rss;
+	pid_t ppid;
+	/*
+	 * Continue parsing AFTER ") "
+	 */
+	int ret = sscanf(rparen + 2,
+			"%c %d "         /* state, ppid */
+			"%*d %*d %*d %*d %*u %*u %*u %*u %*u "
+			"%lu %lu ",       /* utime, stime */
+			&proc_data->state,//&state,
+			&ppid,
+			&proc_data->utime,//&utime,
+			&proc_data->stime//&stime,
+	);
+	if (ret != 4)
+		return -1;
 
-    /*
-     * Continue parsing AFTER ") "
-     */
-    int ret = sscanf(rparen + 2,
-        "%c %d "         /* state, ppid */
-        "%*d %*d %*d %*d %*u %*u %*u %*u %*u "
-        "%lu %lu "       /* utime, stime */
-        "%*d %*d %*d %*d %*d %*d "
-        "%ld",           /* rss */
-        &proc_data->state,//&state,
-        &ppid,
-		&proc_data->utime,//&utime,
-		&proc_data->stime,//&stime,
-        &rss
-    );
 
-    //proc_data->rssKb = (rss * sysconf(_SC_PAGESIZE))/1024;
-    read_rss_status(pid, &proc_data->rssKb);
+	ret = read_rss_status(pid, &proc_data->rssKb);
 
-    if (ret != 5)
-        return -1;
+	if(ret != 0)
+		return -1;
 
-    log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS=%ld RSS(KB)=%ld ",
-           pid, proc_data->comm, proc_data->state, ppid, proc_data->utime, proc_data->stime, rss, proc_data->rssKb);
+	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld ",
+			pid, proc_data->comm, proc_data->state, ppid, proc_data->utime, proc_data->stime, proc_data->rssKb);
 
-    return 0;
+	return 0;
 }
 
 static int read_proc_threads(pid_t pid)

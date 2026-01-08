@@ -108,10 +108,13 @@ static void rotate_logs(void)
 static void log_data(FILE* file, const char* fmt, ...)
 {
 	va_list args;
+	// todo add config file to print to stdout
+#if 0
 	/* Print to stdout */
 	va_start(args, fmt);
 	vprintf(fmt, args);
 	va_end(args);
+#endif
 	/* Print to file if provided */
 	if (file) {
 		va_start(args, fmt);
@@ -143,6 +146,28 @@ static int is_numeric(const char *s)
             return 0;
     }
     return 1;
+}
+
+static int read_rss_status(pid_t pid, long *rss_kb)
+{
+    char path[64], line[256];
+    snprintf(path, sizeof(path), "/proc/%d/status", pid);
+
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+
+    while (fgets(line, sizeof(line), f))
+    {
+        if (strncmp(line, "VmRSS:", 6) == 0)
+        {
+            sscanf(line + 6, "%ld", rss_kb);
+            fclose(f);
+            return 0;
+        }
+    }
+
+    fclose(f);
+    return -1;
 }
 
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
@@ -196,7 +221,8 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
         &rss
     );
 
-    proc_data->rssKb = (rss * sysconf(_SC_PAGESIZE))/1024;
+    //proc_data->rssKb = (rss * sysconf(_SC_PAGESIZE))/1024;
+    read_rss_status(pid, &proc_data->rssKb);
 
     if (ret != 5)
         return -1;
@@ -276,6 +302,9 @@ process_snapshot_status collect_snapshot(void)
 			continue;
 
 		process_data.pid = atoi(de->d_name);
+
+		if(process_data.pid == getpid())
+			continue;
 
 		if (read_proc_stat(process_data.pid,&process_data) == 0) {
 			process_data.threads = read_proc_threads(process_data.pid);

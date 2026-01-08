@@ -9,29 +9,36 @@
 
 
 typedef struct{
-    pid_t pid;                 /* key */
 
+	/* current values */
+	pid_t pid;                 /* key */
     char comm[64];
-
-    /* valori curente */
     unsigned long utime;
     unsigned long stime;
     long rss_kb;
     int threads;
+    char state;
 
-    /* snapshot anterior */
+    /* previous snapshot */
     unsigned long prev_cpu_ticks;
     long prev_rss_kb;
     double prev_timestamp;
 
-    /* rezultate calculate */
+    unsigned long number_of_records;
+    /* calculated cpu data */
     double cpu_usage;          /* % */
-    long rss_delta_kb;
+    double average_cpu_usage;
+    double cpu_usage_sum;
 
+    /* calculated rss data*/
+    long rss_initial_kb;
+    long rss_average_kb;
+    long rss_sum;
+    long rss_variation_since_startup;
     /* housekeeping */
     bool seen_in_snapshot;
 
-    char state;
+
 
     UT_hash_handle hh;
 } process_state_t;
@@ -86,14 +93,42 @@ static double compute_cpu_usage(
 }
 
 
-static int cmp(const void *a, const void *b)
-   {
-       const process_state_t *pa = *(const process_state_t**)a;
-       const process_state_t *pb = *(const process_state_t**)b;
-       if (pb->cpu_usage > pa->cpu_usage) return 1;
-       if (pb->cpu_usage < pa->cpu_usage) return -1;
-       return 0;
-   }
+static int cmp_average_cpu(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->average_cpu_usage > pa->average_cpu_usage) return 1;
+	if (pb->average_cpu_usage < pa->average_cpu_usage) return -1;
+	return 0;
+}
+
+
+static int cmp_average_rss(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->rss_average_kb > pa->rss_average_kb) return 1;
+	if (pb->rss_average_kb < pa->rss_average_kb) return -1;
+	return 0;
+}
+
+static int cmp_rss_variation(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->rss_variation_since_startup > pa->rss_variation_since_startup) return 1;
+	if (pb->rss_variation_since_startup < pa->rss_variation_since_startup) return -1;
+	return 0;
+}
+
+static int cmp_rss_delta(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (labs(pb->rss_variation_since_startup) > labs(pa->rss_variation_since_startup)) return 1;
+	if (labs(pb->rss_variation_since_startup) < labs(pa->rss_variation_since_startup)) return -1;
+	return 0;
+}
 
 
 void process_stats_snapshot_end(void)
@@ -116,34 +151,81 @@ void process_stats_snapshot_end(void)
 
 void process_stats_print_top_cpu(int top_n)
 {
-    int count = HASH_COUNT(g_process_table);
-    if (count == 0) return;
+	int count = HASH_COUNT(g_process_table);
+	if (count == 0) return;
 
-    process_state_t **arr = malloc(sizeof(process_state_t*) * count);
-    if (!arr) return;
+	process_state_t **arr = malloc(sizeof(process_state_t*) * count);
+	if (!arr) return;
 
-    int i = 0;
-    process_state_t *ps, *tmp;
-    HASH_ITER(hh, g_process_table, ps, tmp) {
-        arr[i++] = ps;
-    }
+	int i = 0;
+	process_state_t *ps, *tmp;
+	HASH_ITER(hh, g_process_table, ps, tmp)
+	{
+		arr[i++] = ps;
+	}
 
-    qsort(arr, count, sizeof(process_state_t*), cmp);
+	qsort(arr, count, sizeof(process_state_t*), cmp_average_cpu);
 
-    int n = top_n < count ? top_n : count;
-    printf("\nTop %d processes by CPU usage:\n", n);
-    printf("%-6s %-20s %-8s %-6s %-6s\n", "PID", "COMM", "STATE", "CPU%", "THREADS");
-    for (i = 0; i < n; i++) {
-        ps = arr[i];
-        printf("%-6d %-20s %-8c %-6.2f %-6d\n",
-               ps->pid,
-               ps->comm,
-               ps->state,
-               ps->cpu_usage,
-               ps->threads);
-    }
+	int n = top_n < count ? top_n : count;
+	printf("\nTop %d processes by average CPU usage:\n", n);
+	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
+	for (i = 0; i < n; i++)
+	{
+		ps = arr[i];
+		printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+				ps->pid,
+				ps->comm,
+				ps->state,
+				ps->average_cpu_usage,
+				ps->threads,
+				ps->number_of_records);
+	}
 
-    free(arr);
+	qsort(arr, count, sizeof(process_state_t*), cmp_average_rss);
+	printf("\nTop %d processes by average RSS (KB):\n", n);
+	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)%", "THREADS", "RECORDS");
+	for (i = 0; i < n; i++)
+	{
+		ps = arr[i];
+		printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+				ps->pid,
+				ps->comm,
+				ps->state,
+				ps->rss_average_kb,
+				ps->threads,
+				ps->number_of_records);
+	}
+
+	qsort(arr, count, sizeof(process_state_t*), cmp_rss_variation);
+	printf("\nTop %d processes by RSS increase since startup (KB):\n", n);
+	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)%", "THREADS", "RECORDS");
+	for (i = 0; i < n; i++)
+	{
+		ps = arr[i];
+		printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+				ps->pid,
+				ps->comm,
+				ps->state,
+				ps->rss_variation_since_startup,
+				ps->threads,
+				ps->number_of_records);
+	}
+	qsort(arr, count, sizeof(process_state_t*), cmp_rss_delta);
+	printf("\nTop %d processes by RSS delta since startup (KB):\n", n);
+	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)%", "THREADS", "RECORDS");
+	for (i = 0; i < n; i++)
+	{
+		ps = arr[i];
+		printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+				ps->pid,
+				ps->comm,
+				ps->state,
+				ps->rss_variation_since_startup,
+				ps->threads,
+				ps->number_of_records);
+	}
+
+	free(arr);
 }
 
 void process_stats_update(process_state_input_t* input)
@@ -159,9 +241,13 @@ void process_stats_update(process_state_input_t* input)
 		if(proc_state->prev_timestamp > 0.0 && delta_time > 0.0)
 		{
 			proc_state->cpu_usage = compute_cpu_usage(prev_ticks, curr_ticks, proc_state->prev_timestamp, input->timestamp_sec);
-
-			proc_state->rss_delta_kb = input->rssKb - proc_state->prev_rss_kb;
 		}
+
+		if(proc_state->number_of_records == 0)
+		{
+			proc_state->rss_initial_kb = input->rssKb;
+		}
+
 
 		proc_state->prev_cpu_ticks = curr_ticks;
 		proc_state->prev_rss_kb = input->rssKb;
@@ -173,6 +259,20 @@ void process_stats_update(process_state_input_t* input)
 		proc_state->threads = input->threads;
 
 		strncpy(proc_state->comm,input->comm,sizeof(proc_state->comm));
+
+		proc_state->number_of_records++;
+		// calculate average cpu usage
+		proc_state->cpu_usage_sum += proc_state->cpu_usage;
+		proc_state->average_cpu_usage = proc_state->cpu_usage_sum / proc_state->number_of_records;
+
+		//calculate average rss usage
+		proc_state->rss_sum += proc_state->rss_kb;
+		proc_state->rss_average_kb  = proc_state->rss_sum / proc_state->number_of_records;
+
+		//calculate rss variation
+		proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
+
+
 		proc_state->seen_in_snapshot = true;
 	}
 	else

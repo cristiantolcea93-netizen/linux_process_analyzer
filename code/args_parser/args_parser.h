@@ -2,10 +2,14 @@
 #define ARGS_PARSER_ARGS_PARSER_H_
 
 #include <stdint.h>
+#include <stdbool.h>
+#include "process_stats.h"
+
 
 typedef struct {
-	uint64_t interval_ms;   // snapshot interval in ms
-	int      count;         // number of snapshots
+	uint64_t 						interval_ms;   		// snapshot interval in ms
+	int      						count;         		// number of snapshots
+	process_stats_metrics_arguments	end_metrics_args;	// end metrics arguments
 }ap_arguments;
 
 typedef enum{

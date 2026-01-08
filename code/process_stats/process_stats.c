@@ -44,6 +44,7 @@ typedef struct{
 } process_state_t;
 
 static process_state_t *g_process_table = NULL;
+static bool is_module_initialized = false;
 
 static process_state_t *get_or_create_process(const process_state_input_t *input)
 {
@@ -133,6 +134,9 @@ static int cmp_rss_delta(const void *a, const void *b)
 
 void process_stats_snapshot_end(void)
 {
+	/**un-commenting this code optimizes memory usage of this tool but will cause processes
+	 * which ended before the analyzer to be missed from the end of the execution analysis*/
+#if 0
 	process_state_t *ps, *tmp;
 	HASH_ITER(hh, g_process_table, ps, tmp)
 	{
@@ -147,136 +151,176 @@ void process_stats_snapshot_end(void)
 			ps->seen_in_snapshot = false;
 		}
 	}
+#endif
 }
 
-void process_stats_print_top_cpu(int top_n)
+void process_stats_initialize(void)
 {
-	int count = HASH_COUNT(g_process_table);
-	if (count == 0) return;
+	is_module_initialized = true;
+}
 
-	process_state_t **arr = malloc(sizeof(process_state_t*) * count);
-	if (!arr) return;
-
-	int i = 0;
-	process_state_t *ps, *tmp;
-	HASH_ITER(hh, g_process_table, ps, tmp)
+void process_stats_print_metrics(process_stats_metrics_arguments * args)
+{
+	if(true == is_module_initialized)
 	{
-		arr[i++] = ps;
+		int count = HASH_COUNT(g_process_table);
+		if (count == 0) return;
+
+		process_state_t **arr = malloc(sizeof(process_state_t*) * count);
+		if (!arr) return;
+
+		int i = 0;
+		process_state_t *ps, *tmp;
+		HASH_ITER(hh, g_process_table, ps, tmp)
+		{
+			arr[i++] = ps;
+		}
+
+		if(true == args->cpu_average_requested)
+		{
+			qsort(arr, count, sizeof(process_state_t*), cmp_average_cpu);
+
+			int n = args->cpu_average_pids_to_display < count ? args->cpu_average_pids_to_display : count;
+			printf("\nTop %d processes by average CPU usage:\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->average_cpu_usage,
+						ps->threads,
+						ps->number_of_records);
+			}
+		}
+
+		if(true == args->rss_average_requested)
+		{
+			int n = args->rss_average_pids_to_display < count ? args->rss_average_pids_to_display : count;
+			qsort(arr, count, sizeof(process_state_t*), cmp_average_rss);
+			printf("\nTop %d processes by average RSS (KB):\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->rss_average_kb,
+						ps->threads,
+						ps->number_of_records);
+			}
+		}
+
+		if(true == args->rss_increase_requested)
+		{
+			int n = args->rss_increase_pids_to_display < count ? args->rss_increase_pids_to_display : count;
+			qsort(arr, count, sizeof(process_state_t*), cmp_rss_variation);
+			printf("\nTop %d processes by RSS increase since startup (KB):\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->rss_variation_since_startup,
+						ps->threads,
+						ps->number_of_records);
+			}
+		}
+
+		if(true == args->rss_delta_requested)
+		{
+			int n = args->rss_delta_pids_to_display < count ? args->rss_delta_pids_to_display : count;
+			qsort(arr, count, sizeof(process_state_t*), cmp_rss_delta);
+			printf("\nTop %d processes by RSS delta since startup (KB):\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS delta (KB)", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->rss_variation_since_startup,
+						ps->threads,
+						ps->number_of_records);
+			}
+
+		}
+
+
+		free(arr);
+	}
+	else
+	{
+		// module not initialized, nothing to do
 	}
 
-	qsort(arr, count, sizeof(process_state_t*), cmp_average_cpu);
-
-	int n = top_n < count ? top_n : count;
-	printf("\nTop %d processes by average CPU usage:\n", n);
-	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
-	for (i = 0; i < n; i++)
-	{
-		ps = arr[i];
-		printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
-				ps->pid,
-				ps->comm,
-				ps->state,
-				ps->average_cpu_usage,
-				ps->threads,
-				ps->number_of_records);
-	}
-
-	qsort(arr, count, sizeof(process_state_t*), cmp_average_rss);
-	printf("\nTop %d processes by average RSS (KB):\n", n);
-	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)%", "THREADS", "RECORDS");
-	for (i = 0; i < n; i++)
-	{
-		ps = arr[i];
-		printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
-				ps->pid,
-				ps->comm,
-				ps->state,
-				ps->rss_average_kb,
-				ps->threads,
-				ps->number_of_records);
-	}
-
-	qsort(arr, count, sizeof(process_state_t*), cmp_rss_variation);
-	printf("\nTop %d processes by RSS increase since startup (KB):\n", n);
-	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)%", "THREADS", "RECORDS");
-	for (i = 0; i < n; i++)
-	{
-		ps = arr[i];
-		printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
-				ps->pid,
-				ps->comm,
-				ps->state,
-				ps->rss_variation_since_startup,
-				ps->threads,
-				ps->number_of_records);
-	}
-	qsort(arr, count, sizeof(process_state_t*), cmp_rss_delta);
-	printf("\nTop %d processes by RSS delta since startup (KB):\n", n);
-	printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)%", "THREADS", "RECORDS");
-	for (i = 0; i < n; i++)
-	{
-		ps = arr[i];
-		printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
-				ps->pid,
-				ps->comm,
-				ps->state,
-				ps->rss_variation_since_startup,
-				ps->threads,
-				ps->number_of_records);
-	}
-
-	free(arr);
 }
 
 void process_stats_update(process_state_input_t* input)
 {
-	process_state_t* proc_state = get_or_create_process(input);
-
-	if(proc_state)
+	if(true == is_module_initialized)
 	{
-		unsigned long curr_ticks = input->utime + input->stime;
-		unsigned long prev_ticks = proc_state->prev_cpu_ticks;
-		double delta_time = input->timestamp_sec - proc_state->prev_timestamp;
+		process_state_t* proc_state = get_or_create_process(input);
 
-		if(proc_state->prev_timestamp > 0.0 && delta_time > 0.0)
+		if(proc_state)
 		{
-			proc_state->cpu_usage = compute_cpu_usage(prev_ticks, curr_ticks, proc_state->prev_timestamp, input->timestamp_sec);
-		}
+			unsigned long curr_ticks = input->utime + input->stime;
+			unsigned long prev_ticks = proc_state->prev_cpu_ticks;
+			double delta_time = input->timestamp_sec - proc_state->prev_timestamp;
 
-		if(proc_state->number_of_records == 0)
+			if(proc_state->prev_timestamp > 0.0 && delta_time > 0.0)
+			{
+				proc_state->cpu_usage = compute_cpu_usage(prev_ticks, curr_ticks, proc_state->prev_timestamp, input->timestamp_sec);
+			}
+
+			if(proc_state->number_of_records == 0)
+			{
+				proc_state->rss_initial_kb = input->rssKb;
+			}
+
+
+			proc_state->prev_cpu_ticks = curr_ticks;
+			proc_state->prev_rss_kb = input->rssKb;
+			proc_state->prev_timestamp = input->timestamp_sec;
+
+			proc_state->utime = input->utime;
+			proc_state->stime = input->stime;
+			proc_state->rss_kb = input->rssKb;
+			proc_state->threads = input->threads;
+
+			strncpy(proc_state->comm,input->comm,sizeof(proc_state->comm));
+
+			proc_state->number_of_records++;
+			// calculate average cpu usage
+			proc_state->cpu_usage_sum += proc_state->cpu_usage;
+			proc_state->average_cpu_usage = proc_state->cpu_usage_sum / proc_state->number_of_records;
+
+			//calculate average rss usage
+			proc_state->rss_sum += proc_state->rss_kb;
+			proc_state->rss_average_kb  = proc_state->rss_sum / proc_state->number_of_records;
+
+			//calculate rss variation
+			proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
+
+
+			proc_state->seen_in_snapshot = true;
+		}
+		else
 		{
-			proc_state->rss_initial_kb = input->rssKb;
+			//memory allocation failed, nothing to do
 		}
-
-
-		proc_state->prev_cpu_ticks = curr_ticks;
-		proc_state->prev_rss_kb = input->rssKb;
-		proc_state->prev_timestamp = input->timestamp_sec;
-
-		proc_state->utime = input->utime;
-		proc_state->stime = input->stime;
-		proc_state->rss_kb = input->rssKb;
-		proc_state->threads = input->threads;
-
-		strncpy(proc_state->comm,input->comm,sizeof(proc_state->comm));
-
-		proc_state->number_of_records++;
-		// calculate average cpu usage
-		proc_state->cpu_usage_sum += proc_state->cpu_usage;
-		proc_state->average_cpu_usage = proc_state->cpu_usage_sum / proc_state->number_of_records;
-
-		//calculate average rss usage
-		proc_state->rss_sum += proc_state->rss_kb;
-		proc_state->rss_average_kb  = proc_state->rss_sum / proc_state->number_of_records;
-
-		//calculate rss variation
-		proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
-
-
-		proc_state->seen_in_snapshot = true;
 	}
 	else
 	{
-		//memory allocation failed, nothing to do
+		// no analysis is performed if the module is not initialized
 	}
+
 }

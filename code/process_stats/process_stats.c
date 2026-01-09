@@ -274,11 +274,19 @@ void process_stats_update(process_state_input_t* input)
 		{
 			unsigned long curr_ticks = input->utime + input->stime;
 			unsigned long prev_ticks = proc_state->prev_cpu_ticks;
-			double delta_time = input->timestamp_sec - proc_state->prev_timestamp;
 
-			if(proc_state->prev_timestamp > 0.0 && delta_time > 0.0)
+
+			proc_state->cpu_usage = 0.0;
+			if (proc_state->number_of_records > 0)
 			{
-				proc_state->cpu_usage = compute_cpu_usage(prev_ticks, curr_ticks, proc_state->prev_timestamp, input->timestamp_sec);
+				if (curr_ticks >= proc_state->prev_cpu_ticks)
+				{
+					double delta_time = input->timestamp_sec - proc_state->prev_timestamp;
+					if(delta_time > 0.0)
+					{
+						proc_state->cpu_usage = compute_cpu_usage(prev_ticks, curr_ticks, proc_state->prev_timestamp, input->timestamp_sec);
+					}
+				}
 			}
 
 			if(proc_state->number_of_records == 0)

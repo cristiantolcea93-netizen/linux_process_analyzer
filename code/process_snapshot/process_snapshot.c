@@ -370,6 +370,14 @@ void process_snapshot_deinit(void)
 		close(g_lock_fd);
 		g_lock_fd = -1;
 	}
+
+	if(PSN_pfOutputFile)
+	{
+		if(fclose(PSN_pfOutputFile)!=0)
+		{
+			fprintf(stderr, "process_snapshot_deinit: Failed to close PSN_pfOutputFile!\n");
+		}
+	}
 }
 
 

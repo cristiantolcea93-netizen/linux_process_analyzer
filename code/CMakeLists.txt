@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 # Set some basic project attributes
 project (process_analyzer
-	VERSION 0.1
-	DESCRIPTION "A Hello World Project")
+	VERSION 1.0
+	DESCRIPTION "linux process analyzer")
 
 # This project will output an executable file
 add_executable(${PROJECT_NAME}

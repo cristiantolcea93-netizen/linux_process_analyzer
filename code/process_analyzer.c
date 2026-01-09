@@ -2,6 +2,10 @@
 #include <time.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <signal.h>
+#include <stdatomic.h>
+#include <string.h>
+#include <errno.h>
 #include "process_snapshot.h"
 #include "args_parser.h"
 #include "process_stats.h"
@@ -9,8 +13,27 @@
 
 static int getTimeFd(uint64_t interval_ms);
 static void run_snapshot_once();
+static void register_signal_handler();
 
-ap_arguments gArguments;
+static ap_arguments gArguments;
+static volatile sig_atomic_t g_stop_requested = 0;
+
+static void sigint_handler(int signo)
+{
+    (void)signo;
+    g_stop_requested = 1;
+}
+
+static void register_signal_handler()
+{
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = sigint_handler;
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
+}
+
+
 
 static int getTimeFd(uint64_t interval_ms)
 {
@@ -63,12 +86,28 @@ int main(int argc, char **argv)
 		int tfd = getTimeFd(gArguments.interval_ms);
 		if(tfd != -1)
 		{
+			register_signal_handler();
 			int noOfIterations = 0;
 			while(noOfIterations < gArguments.count)
 			{
 				uint64_t expirations;
+
+				if(g_stop_requested)
+				{
+					//program interrupted
+					printf("\nProgram interrupted by user (CTRL+C) or terminated\n");
+					break;
+				}
+
 				if (read(tfd, &expirations, sizeof(expirations)) != sizeof(expirations))
 				{
+					if (errno == EINTR && g_stop_requested)
+					{
+						//program interrupted
+						printf("\nProgram interrupted by user (CTRL+C) or terminated\n");
+						break;
+					}
+
 					fprintf(stderr, "failed to read expirations!");
 					break;
 				}
@@ -80,7 +119,7 @@ int main(int argc, char **argv)
 				}
 				noOfIterations++;
 			}
-			//print top 10 processes by CPU
+			//print end of execution metrics
 			process_stats_print_metrics(&(gArguments.end_metrics_args));
 		}
 

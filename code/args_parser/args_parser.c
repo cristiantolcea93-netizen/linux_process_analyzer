@@ -8,8 +8,10 @@
 #include "args_parser.h"
 #include "process_stats.h"
 
+#define MAX_NUMBER_OF_SNAPSHOTS 0x7FFFFFFF
 
-static parse_args_status parse_count(const char *arg, int *out_count);
+static parse_args_status parse_integer_arg(const char *arg, int *out_count);
+static parse_args_status parse_number_of_snapshots(const char* arg, int *out);
 static void print_usage(const char *prog);
 static parse_args_status parse_duration_ms(const char *arg, uint64_t *out_ms);
 
@@ -19,7 +21,7 @@ static void print_usage(const char *prog)
 	printf("Usage: %s [options]\n", prog);
 	printf("Options:\n");
 	printf("  -i, --interval <dur>   	Interval (e.g. 500ms, 1s, 2m)\n");
-	printf("  -n, --count <N>        	Number of snapshots\n");
+	printf("  -n, --count <N>        	Number of snapshots. Use \"infinity\" to collect snapshots until program is interrupted or terminated\n");
 	printf("  -c, --cpu_usage <N>    	Display N processes with the highest average CPU usage at the end of execution\n");
 	printf("  -r, --rss_usage <N>    	Display N processes with the highest average RSS usage at the end of execution\n");
 	printf("  -s, --rss_increase <N>	Display N processes with the highest RSS increase at the end of execution\n");
@@ -27,8 +29,23 @@ static void print_usage(const char *prog)
 	printf("  -h, --help             	Show this help\n");
 }
 
+static parse_args_status parse_number_of_snapshots(const char* arg, int *out)
+{
+	if(strcmp(arg, "infinity") == 0)
+	{
+		// check if it is infinity
+		*out = MAX_NUMBER_OF_SNAPSHOTS;
+		return parse_args_ok;
+	}
+	else
+	{
+		// not infinity, handle it as a regular integer value
+		return parse_integer_arg(arg, out);
+	}
+}
 
-static parse_args_status parse_count(const char *arg, int *out_count)
+
+static parse_args_status parse_integer_arg(const char *arg, int *out_count)
 {
     char *endptr = NULL;
     errno = 0;
@@ -102,7 +119,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			break;
 
 		case 'n':
-			if (parse_count(optarg, &cfg->count) != parse_args_ok)
+			if (parse_number_of_snapshots(optarg, &cfg->count) != parse_args_ok)
 			{
 				fprintf(stderr, "Invalid count: %s\n", optarg);
 				return parse_args_error;
@@ -114,7 +131,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			break;
 
 		case 'c':
-			if (parse_count(optarg, &cfg->end_metrics_args.cpu_average_pids_to_display) != parse_args_ok)
+			if (parse_integer_arg(optarg, &cfg->end_metrics_args.cpu_average_pids_to_display) != parse_args_ok)
 			{
 				fprintf(stderr, "Invalid cpu_usage: %s\n", optarg);
 				return parse_args_error;
@@ -126,7 +143,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			break;
 
 		case 'r':
-			if (parse_count(optarg, &cfg->end_metrics_args.rss_average_pids_to_display) != parse_args_ok)
+			if (parse_integer_arg(optarg, &cfg->end_metrics_args.rss_average_pids_to_display) != parse_args_ok)
 			{
 				fprintf(stderr, "Invalid rss_usage: %s\n", optarg);
 				return parse_args_error;
@@ -138,7 +155,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			break;
 
 		case 's':
-			if (parse_count(optarg, &cfg->end_metrics_args.rss_increase_pids_to_display) != parse_args_ok)
+			if (parse_integer_arg(optarg, &cfg->end_metrics_args.rss_increase_pids_to_display) != parse_args_ok)
 			{
 				fprintf(stderr, "Invalid rss_increase: %s\n", optarg);
 				return parse_args_error;
@@ -150,7 +167,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			break;
 
 		case 'd':
-			if (parse_count(optarg, &cfg->end_metrics_args.rss_delta_pids_to_display) != parse_args_ok)
+			if (parse_integer_arg(optarg, &cfg->end_metrics_args.rss_delta_pids_to_display) != parse_args_ok)
 			{
 				fprintf(stderr, "Invalid rss_delta: %s\n", optarg);
 				return parse_args_error;

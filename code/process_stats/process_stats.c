@@ -12,35 +12,47 @@ typedef struct{
 
 	/* current values */
 	pid_t pid;                 /* key */
-    char comm[64];
-    unsigned long utime;
-    unsigned long stime;
-    long rss_kb;
-    int threads;
-    char state;
+	char comm[64];
+	unsigned long utime;
+	unsigned long stime;
+	long rss_kb;
+	int threads;
+	char state;
 
-    /* previous snapshot */
-    unsigned long prev_cpu_ticks;
-    long prev_rss_kb;
-    double prev_timestamp;
+	/*io data*/
+	unsigned long long total_read_kbytes;
+	unsigned long long total_write_kbytes;
 
-    unsigned long number_of_records;
-    /* calculated cpu data */
-    double cpu_usage;          /* % */
-    double average_cpu_usage;
-    double cpu_usage_sum;
+	/* previous snapshot */
+	unsigned long prev_cpu_ticks;
+	long prev_rss_kb;
+	double prev_timestamp;
 
-    /* calculated rss data*/
-    long rss_initial_kb;
-    long rss_average_kb;
-    long rss_sum;
-    long rss_variation_since_startup;
-    /* housekeeping */
-    bool seen_in_snapshot;
+	unsigned long number_of_records;
+	/* calculated cpu data */
+	double cpu_usage;          /* % */
+	double average_cpu_usage;
+	double cpu_usage_sum;
+	long cpu_usage_samples;
 
+	/* calculated rss data*/
+	long rss_initial_kb;
+	long rss_average_kb;
+	long rss_sum;
+	long rss_variation_since_startup;
 
+	/* calculated IO data*/
+	unsigned long long prev_read_kbytes;
+	unsigned long long prev_write_kbytes;
 
-    UT_hash_handle hh;
+	double avg_read_rate_kb_s;
+	double avg_write_rate_kb_s;
+	double io_time_acc;
+
+	/* housekeeping */
+	bool seen_in_snapshot;
+
+	UT_hash_handle hh;
 } process_state_t;
 
 static process_state_t *g_process_table = NULL;
@@ -64,10 +76,10 @@ static process_state_t *get_or_create_process(const process_state_input_t *input
         ps->stime = input->stime;
         ps->rss_kb = input->rssKb;
         ps->threads = input->threads;
-
         ps->prev_cpu_ticks = input->utime + input->stime;
         ps->prev_rss_kb = input->rssKb;
         ps->state = input->state;
+
         HASH_ADD_INT(g_process_table, pid, ps);
     }
 
@@ -131,6 +143,68 @@ static int cmp_rss_delta(const void *a, const void *b)
 	return 0;
 }
 
+static int compare_total_read_kbytes(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->total_read_kbytes > pa->total_read_kbytes) return 1;
+	if (pb->total_read_kbytes < pa->total_read_kbytes) return -1;
+	return 0;
+}
+
+static int compare_total_write_kbytes(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->total_write_kbytes > pa->total_write_kbytes) return 1;
+	if (pb->total_write_kbytes < pa->total_write_kbytes) return -1;
+	return 0;
+}
+
+static int compare_avg_read_rate(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->avg_read_rate_kb_s > pa->avg_read_rate_kb_s) return 1;
+	if (pb->avg_read_rate_kb_s < pa->avg_read_rate_kb_s) return -1;
+	return 0;
+}
+
+static int compare_avg_write_rate(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->avg_write_rate_kb_s > pa->avg_write_rate_kb_s) return 1;
+	if (pb->avg_write_rate_kb_s < pa->avg_write_rate_kb_s) return -1;
+	return 0;
+}
+
+static void calculate_io_data(process_state_input_t* input,process_state_t* proc_state)
+{
+    if (proc_state->number_of_records > 0) {
+
+        double dt = input->timestamp - proc_state->prev_timestamp;
+
+        if (dt > 0.0) {
+
+            uint64_t read_delta  = 0;
+            uint64_t write_delta = 0;
+
+            if (input->read_kbytes >= proc_state->prev_read_kbytes)
+                read_delta = input->read_kbytes - proc_state->prev_read_kbytes;
+
+            if (input->write_kbytes >= proc_state->prev_write_kbytes)
+                write_delta = input->write_kbytes - proc_state->prev_write_kbytes;
+
+            proc_state->total_read_kbytes  += read_delta;
+            proc_state->total_write_kbytes += write_delta;
+            proc_state->io_time_acc        += dt;
+        }
+    }
+    proc_state->prev_read_kbytes  = input->read_kbytes;
+    proc_state->prev_write_kbytes = input->write_kbytes;
+    proc_state->prev_timestamp    = input->timestamp;
+}
 
 void process_stats_snapshot_end(void)
 {
@@ -174,10 +248,30 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 		HASH_ITER(hh, g_process_table, ps, tmp)
 		{
 			arr[i++] = ps;
+
+			if(true == args->cpu_average_requested)
+			{
+				ps->average_cpu_usage = ps->cpu_usage_sum / ps->cpu_usage_samples;
+			}
+			if(true == args->rss_average_requested)
+			{
+				ps->rss_average_kb  = ps->rss_sum / ps->number_of_records;
+			}
+
+			if(true) //hardcode for now
+			{
+				ps->avg_read_rate_kb_s = ps->total_read_kbytes/ps->io_time_acc;
+			}
+			if(true) // hardcode for now
+			{
+				ps->avg_write_rate_kb_s = ps->total_write_kbytes/ps->io_time_acc;
+			}
 		}
 
 		if(true == args->cpu_average_requested)
 		{
+			//calculate average only when requested
+
 			qsort(arr, count, sizeof(process_state_t*), cmp_average_cpu);
 
 			int n = args->cpu_average_pids_to_display < count ? args->cpu_average_pids_to_display : count;
@@ -199,6 +293,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 		if(true == args->rss_average_requested)
 		{
 			int n = args->rss_average_pids_to_display < count ? args->rss_average_pids_to_display : count;
+			//calculate average only when requested
 			qsort(arr, count, sizeof(process_state_t*), cmp_average_rss);
 			printf("\nTop %d processes by average RSS (KB):\n", n);
 			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
@@ -254,6 +349,83 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 
 		}
 
+		if(true)
+		{
+			int n = 10 < count ? 10 : count;
+			qsort(arr, count, sizeof(process_state_t*), compare_total_read_kbytes);
+			printf("\nTop %d processes by bytes read from disk (KB):\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->total_read_kbytes,
+						ps->threads,
+						ps->number_of_records);
+			}
+
+		}
+
+		if(true)
+		{
+			int n = 10 < count ? 10 : count;
+			qsort(arr, count, sizeof(process_state_t*), compare_total_write_kbytes);
+			printf("\nTop %d processes by bytes written to disk (KB):\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->total_write_kbytes,
+						ps->threads,
+						ps->number_of_records);
+			}
+		}
+
+		if(true)
+		{
+			int n = 10 < count ? 10 : count;
+			qsort(arr, count, sizeof(process_state_t*), compare_avg_read_rate);
+			printf("\nTop %d processes by disk read rate (KB/s):\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->avg_read_rate_kb_s,
+						ps->threads,
+						ps->number_of_records);
+			}
+		}
+
+		if(true)
+		{
+			int n = 10 < count ? 10 : count;
+			qsort(arr, count, sizeof(process_state_t*), compare_avg_write_rate);
+			printf("\nTop %d processes by disk write rate (KB/s):\n", n);
+			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");
+			for (i = 0; i < n; i++)
+			{
+				ps = arr[i];
+				printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+						ps->pid,
+						ps->comm,
+						ps->state,
+						ps->avg_write_rate_kb_s,
+						ps->threads,
+						ps->number_of_records);
+			}
+		}
+
 
 		free(arr);
 	}
@@ -281,10 +453,13 @@ void process_stats_update(process_state_input_t* input)
 			{
 				if (curr_ticks >= proc_state->prev_cpu_ticks)
 				{
-					double delta_time = input->timestamp_sec - proc_state->prev_timestamp;
+					double delta_time = input->timestamp - proc_state->prev_timestamp;
 					if(delta_time > 0.0)
 					{
-						proc_state->cpu_usage = compute_cpu_usage(prev_ticks, curr_ticks, proc_state->prev_timestamp, input->timestamp_sec);
+						proc_state->cpu_usage = compute_cpu_usage(prev_ticks, curr_ticks, proc_state->prev_timestamp, input->timestamp);
+						// calculate sum for avg cpu usage
+						proc_state->cpu_usage_sum += proc_state->cpu_usage;
+						proc_state->cpu_usage_samples++;
 					}
 				}
 			}
@@ -297,7 +472,7 @@ void process_stats_update(process_state_input_t* input)
 
 			proc_state->prev_cpu_ticks = curr_ticks;
 			proc_state->prev_rss_kb = input->rssKb;
-			proc_state->prev_timestamp = input->timestamp_sec;
+
 
 			proc_state->utime = input->utime;
 			proc_state->stime = input->stime;
@@ -307,17 +482,18 @@ void process_stats_update(process_state_input_t* input)
 			strncpy(proc_state->comm,input->comm,sizeof(proc_state->comm));
 
 			proc_state->number_of_records++;
-			// calculate average cpu usage
-			proc_state->cpu_usage_sum += proc_state->cpu_usage;
-			proc_state->average_cpu_usage = proc_state->cpu_usage_sum / proc_state->number_of_records;
 
-			//calculate average rss usage
+
+			//calculate sum for avg rss usage
 			proc_state->rss_sum += proc_state->rss_kb;
-			proc_state->rss_average_kb  = proc_state->rss_sum / proc_state->number_of_records;
 
 			//calculate rss variation
 			proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
 
+            //calculate io data
+			calculate_io_data(input, proc_state);
+
+			proc_state->prev_timestamp = input->timestamp;
 
 			proc_state->seen_in_snapshot = true;
 		}

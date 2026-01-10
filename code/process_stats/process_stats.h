@@ -28,8 +28,10 @@ typedef struct
 	unsigned long utime;
 	unsigned long stime;
 	long rssKb;
-	double timestamp_sec;
+	double timestamp;
 	int threads;
+	unsigned long long read_kbytes;
+	unsigned long long write_kbytes;
 }process_state_input_t;
 
 extern void process_stats_initialize(void);

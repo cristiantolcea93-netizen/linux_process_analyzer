@@ -41,6 +41,8 @@ static int read_proc_threads(pid_t pid);
 static process_snapshot_status make_log_dir(void);
 static off_t get_file_size(const char *path);
 static void rotate_logs(void);
+static int read_proc_io(pid_t pid, process_state_input_t *p);
+static int read_rss_status(pid_t pid, long *rss_kb);
 
 
 static process_snapshot_status acquire_lock(void)
@@ -124,10 +126,10 @@ static void log_data(FILE* file, const char* fmt, ...)
 	}
 }
 
-static void print_timestamp(double *timestampInSeconds)
+static void print_timestamp(double *timestamp)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts); // seconds + nanoseconds
+    clock_gettime(CLOCK_MONOTONIC, &ts); // seconds + nanoseconds
     time_t sec = ts.tv_sec;
     struct tm tm_info;
     localtime_r(&sec, &tm_info);
@@ -136,7 +138,8 @@ static void print_timestamp(double *timestampInSeconds)
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
     log_data(PSN_pfOutputFile,"[%s.%03ld] ", buf, ts.tv_nsec / 1000000); // milliseconds
 
-    *timestampInSeconds = (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+    //monotonic fractional timestamp
+    *timestamp = (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
 static int is_numeric(const char *s)
@@ -168,6 +171,39 @@ static int read_rss_status(pid_t pid, long *rss_kb)
 
     fclose(f);
     return -1;
+}
+
+static int read_proc_io(pid_t pid, process_state_input_t *p)
+{
+    char path[64];
+    char line[256];
+    FILE *f;
+
+    snprintf(path, sizeof(path), "/proc/%d/io", pid);
+    f = fopen(path, "r");
+    if (!f)
+        return -1;
+
+    p->read_kbytes  = 0;
+    p->write_kbytes = 0;
+
+    while (fgets(line, sizeof(line), f)) {
+
+        unsigned long long v;
+
+        if (sscanf(line, "read_bytes: %llu", &v) == 1) {
+            p->read_kbytes = v / 1024;
+            continue;
+        }
+
+        if (sscanf(line, "write_bytes: %llu", &v) == 1) {
+            p->write_kbytes = v / 1024;
+            continue;
+        }
+    }
+
+    fclose(f);
+    return 0;
 }
 
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
@@ -224,8 +260,16 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 	if(ret != 0)
 		return -1;
 
-	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld ",
-			pid, proc_data->comm, proc_data->state, ppid, proc_data->utime, proc_data->stime, proc_data->rssKb);
+
+
+	ret = read_proc_io(pid, proc_data);
+
+	if(ret != 0)
+		return -1;
+
+
+	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld ",
+			pid, proc_data->comm, proc_data->state, ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes);
 
 	return 0;
 }
@@ -286,7 +330,7 @@ process_snapshot_status collect_snapshot(void)
 	}
 	process_state_input_t process_data;
 
-	print_timestamp(&process_data.timestamp_sec);
+	print_timestamp(&process_data.timestamp);
 	log_data(PSN_pfOutputFile," SNAPSHOT START ################# \n");
 
 	struct dirent *de;
@@ -305,11 +349,14 @@ process_snapshot_status collect_snapshot(void)
 
 		if (read_proc_stat(process_data.pid,&process_data) == 0) {
 			process_data.threads = read_proc_threads(process_data.pid);
-			if (process_data.threads >= 0)
+			if (process_data.threads >= 0){
 				log_data(PSN_pfOutputFile,"THREADS=%d\n", process_data.threads);
+			}
+
+			//feed the data to process_stat
+			process_stats_update(&process_data);
 		}
-		//feed the data to process_stat
-		process_stats_update(&process_data);
+
 	}
 
 	closedir(dir);

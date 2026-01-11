@@ -83,6 +83,15 @@ int main(int argc, char **argv)
 
 	if(parse_args_ok == l_parse_status)
 	{
+		if(true == gArguments.delete_old_files)
+		{
+			/*delete the old files if the argument was given*/
+			if(process_snapshot_success != process_snapshot_delete_old_files())
+			{
+				/*failed to delete old files, do not start the analyzer*/
+				return -1;
+			}
+		}
 		int tfd = getTimeFd(gArguments.interval_ms);
 		if(tfd != -1)
 		{
@@ -122,7 +131,17 @@ int main(int argc, char **argv)
 			//print end of execution metrics
 			process_stats_print_metrics(&(gArguments.end_metrics_args));
 		}
+		else
+		{
+			//failed to start the timer
+			return -1;
+		}
 
+	}
+	else
+	{
+		//failed to parse arguments
+		return -1;
 	}
 	return 0;
 }

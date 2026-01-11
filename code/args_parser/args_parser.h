@@ -5,10 +5,12 @@
 #include <stdbool.h>
 #include "process_stats.h"
 
+#define PROCESS_ANALYZER_VERSION	"process_analyzer V1.0"
 
 typedef struct {
 	uint64_t 						interval_ms;   		// snapshot interval in ms
 	int      						count;         		// number of snapshots
+	bool 							delete_old_files;	// delete old files generated during previous builds
 	process_stats_metrics_arguments	end_metrics_args;	// end metrics arguments
 }ap_arguments;
 

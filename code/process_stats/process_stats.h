@@ -17,6 +17,18 @@ typedef struct{
 	bool rss_delta_requested;
 	int rss_delta_pids_to_display;
 
+	bool bytes_read_requested;
+	int bytes_read_pids_to_display;
+
+	bool bytes_write_requested;
+	int bytes_write_pids_to_display;
+
+	bool read_rate_requested;
+	int read_rate_pids_to_display;
+
+	bool write_rate_requested;
+	int write_rate_pids_to_display;
+
 }process_stats_metrics_arguments;
 
 
@@ -28,8 +40,10 @@ typedef struct
 	unsigned long utime;
 	unsigned long stime;
 	long rssKb;
-	double timestamp_sec;
+	double timestamp;
 	int threads;
+	unsigned long long read_kbytes;
+	unsigned long long write_kbytes;
 }process_state_input_t;
 
 extern void process_stats_initialize(void);

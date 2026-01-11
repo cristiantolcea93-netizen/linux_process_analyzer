@@ -187,8 +187,9 @@ code/
 --
 
 ## Author
-Developed as learning and analysis tool for Linux Process monitoring
+Developed as learning and analysis tool for Linux Process monitoring.
 
 --
+
 ## License
 MIT License

@@ -258,11 +258,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 				ps->rss_average_kb  = ps->rss_sum / ps->number_of_records;
 			}
 
-			if(true) //hardcode for now
+			if(true == args->read_rate_requested)
 			{
 				ps->avg_read_rate_kb_s = ps->total_read_kbytes/ps->io_time_acc;
 			}
-			if(true) // hardcode for now
+			if(true == args->write_rate_requested)
 			{
 				ps->avg_write_rate_kb_s = ps->total_write_kbytes/ps->io_time_acc;
 			}
@@ -349,9 +349,9 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 
 		}
 
-		if(true)
+		if(true == args->bytes_read_requested)
 		{
-			int n = 10 < count ? 10 : count;
+			int n = args->bytes_read_pids_to_display < count ? args->bytes_read_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_total_read_kbytes);
 			printf("\nTop %d processes by bytes read from disk (KB):\n", n);
 			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
@@ -369,9 +369,9 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 
 		}
 
-		if(true)
+		if(true == args->bytes_write_requested)
 		{
-			int n = 10 < count ? 10 : count;
+			int n = args->bytes_write_pids_to_display < count ? args->bytes_write_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_total_write_kbytes);
 			printf("\nTop %d processes by bytes written to disk (KB):\n", n);
 			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
@@ -388,9 +388,9 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 			}
 		}
 
-		if(true)
+		if(true == args->read_rate_requested)
 		{
-			int n = 10 < count ? 10 : count;
+			int n = args->read_rate_pids_to_display < count ? args->read_rate_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_avg_read_rate);
 			printf("\nTop %d processes by disk read rate (KB/s):\n", n);
 			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
@@ -407,9 +407,9 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 			}
 		}
 
-		if(true)
+		if(true == args->write_rate_requested)
 		{
-			int n = 10 < count ? 10 : count;
+			int n = args->write_rate_pids_to_display < count ? args->write_rate_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_avg_write_rate);
 			printf("\nTop %d processes by disk write rate (KB/s):\n", n);
 			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");

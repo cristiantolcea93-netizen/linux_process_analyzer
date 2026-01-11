@@ -10,6 +10,7 @@ typedef enum
 
 extern process_snapshot_status collect_snapshot(void);
 extern process_snapshot_status process_snapshot_initialize(void);
+extern process_snapshot_status process_snapshot_delete_old_files(void);
 extern void process_snapshot_deinit(void);
 
 

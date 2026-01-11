@@ -129,7 +129,7 @@ static void log_data(FILE* file, const char* fmt, ...)
 static void print_timestamp(double *timestamp)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts); // seconds + nanoseconds
+    clock_gettime(CLOCK_REALTIME, &ts); // seconds + nanoseconds
     time_t sec = ts.tv_sec;
     struct tm tm_info;
     localtime_r(&sec, &tm_info);
@@ -138,6 +138,7 @@ static void print_timestamp(double *timestamp)
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
     log_data(PSN_pfOutputFile,"[%s.%03ld] ", buf, ts.tv_nsec / 1000000); // milliseconds
 
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     //monotonic fractional timestamp
     *timestamp = (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
@@ -319,6 +320,44 @@ static process_snapshot_status make_log_dir(void)
 
 	return l_retVal;
 
+}
+
+process_snapshot_status process_snapshot_delete_old_files(void)
+{
+	struct dirent *ent;
+
+	DIR *dir = opendir(PSN_LOG_DIR);
+	if (dir != NULL) {
+		/* scan the directory */
+		while ((ent = readdir(dir)) != NULL)
+		{
+			if (strncmp(ent->d_name, PSN_LOG_FILE,strlen(PSN_LOG_FILE)) == 0)
+			{
+				/*remove only the files created by the tool*/
+				char deletefilePath[512];
+				snprintf(deletefilePath, sizeof(deletefilePath), "%s/%s", PSN_LOG_DIR, ent->d_name);
+
+				if(0 == remove(deletefilePath))
+				{
+					printf("Removed old file %s\n",ent->d_name);
+				}
+				else
+				{
+					closedir (dir);
+					fprintf(stderr, "process_snapshot_delete_old_files: Failed to remove old file %s", ent->d_name);
+					return  process_snapshot_error;
+				}
+			}
+		}
+		closedir (dir);
+	}
+	else
+	{
+		/* could not open directory */
+		fprintf(stderr, "process_snapshot_delete_old_files: Failed to open dir %s", PSN_LOG_DIR);
+		return process_snapshot_error;
+	}
+	return process_snapshot_success;
 }
 
 process_snapshot_status collect_snapshot(void)

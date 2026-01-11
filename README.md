@@ -184,7 +184,7 @@ code/
 ## Future improvements
 - configuration file support (log directory, rotation size, count)
 - python utilities for graph generation
---
+---
 
 ## Author
 Developed as learning and analysis tool for Linux Process monitoring.

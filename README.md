@@ -185,7 +185,9 @@ code/
 - configuration file support (log directory, rotation size, count)
 - python utilities for graph generation
 --
+
 ## Author
+
 Developed as a learning and analysis tool for Linux Process monitoring
 --
 ## License

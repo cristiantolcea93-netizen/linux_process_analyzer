@@ -37,10 +37,12 @@ typedef struct
 	pid_t pid;
 	char comm[64];
 	char state;
+	pid_t ppid;
 	unsigned long utime;
 	unsigned long stime;
 	long rssKb;
 	double timestamp;
+	char h_r_timestamp[64];
 	int threads;
 	unsigned long long read_kbytes;
 	unsigned long long write_kbytes;

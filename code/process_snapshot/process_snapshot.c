@@ -34,7 +34,7 @@ static FILE* PSN_pfOutputFile = NULL;
 static int g_lock_fd = -1;
 
 static void log_data(FILE* file, const char* fmt, ...);
-static void print_timestamp(double *timestampInSeconds);
+static void print_timestamp(double *timestamp, char* hr_timestamp);
 static int is_numeric(const char *s);
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
 static int read_proc_threads(pid_t pid);
@@ -43,6 +43,7 @@ static off_t get_file_size(const char *path);
 static void rotate_logs(void);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static int read_rss_status(pid_t pid, long *rss_kb);
+static void write_output_to_json(process_state_input_t* input);
 
 
 static process_snapshot_status acquire_lock(void)
@@ -126,7 +127,7 @@ static void log_data(FILE* file, const char* fmt, ...)
 	}
 }
 
-static void print_timestamp(double *timestamp)
+static void print_timestamp(double *timestamp, char* hr_timestamp)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts); // seconds + nanoseconds
@@ -134,9 +135,26 @@ static void print_timestamp(double *timestamp)
     struct tm tm_info;
     localtime_r(&sec, &tm_info);
 
-    char buf[64];
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
-    log_data(PSN_pfOutputFile,"[%s.%03ld] ", buf, ts.tv_nsec / 1000000); // milliseconds
+  //  char buf[64];
+  //  strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
+  //  log_data(PSN_pfOutputFile,"[%s.%03ld] ", buf, ts.tv_nsec / 1000000); // milliseconds
+
+
+    snprintf(
+            hr_timestamp,
+            64,
+            "%04d-%02d-%02d %02d:%02d:%02d.%03ld",
+            tm_info.tm_year + 1900,
+            tm_info.tm_mon + 1,
+            tm_info.tm_mday,
+            tm_info.tm_hour,
+            tm_info.tm_min,
+            tm_info.tm_sec,
+            ts.tv_nsec / 1000000
+        );
+
+    log_data(PSN_pfOutputFile, "[%s] ", hr_timestamp);
+
 
     clock_gettime(CLOCK_MONOTONIC, &ts);
     //monotonic fractional timestamp
@@ -239,7 +257,6 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 		len = sizeof(proc_data->comm) - 1;
 	memcpy(proc_data->comm, lparen + 1, len);
 
-	pid_t ppid;
 	/*
 	 * Continue parsing AFTER ") "
 	 */
@@ -248,7 +265,7 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 			"%*d %*d %*d %*d %*u %*u %*u %*u %*u "
 			"%lu %lu ",       /* utime, stime */
 			&proc_data->state,//&state,
-			&ppid,
+			&proc_data->ppid,
 			&proc_data->utime,//&utime,
 			&proc_data->stime//&stime,
 	);
@@ -270,9 +287,48 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 
 
 	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld ",
-			pid, proc_data->comm, proc_data->state, ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes);
+			pid, proc_data->comm, proc_data->state, proc_data->ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes);
 
 	return 0;
+}
+
+static void write_output_to_json(process_state_input_t* input)
+{
+	FILE *PSN_pfJsonFile = fopen("/tmp/ptime/ptime.jsonl", "a");
+	if(PSN_pfJsonFile)
+	{
+		fprintf(PSN_pfJsonFile,
+		        "{"
+		        "\"timestamp\":\"%s\","
+		        "\"pid\":%d,"
+		        "\"comm\":\"%s\","
+		        "\"state\":\"%c\","
+		        "\"ppid\":%d,"
+		        "\"utime\":%lu,"
+		        "\"stime\":%lu,"
+		        "\"rss_kb\":%ld,"
+		        "\"io_read_kb\":%lld,"
+		        "\"io_write_kb\":%lld,"
+		        "\"threads\":%d"
+		        "}\n",
+				input->h_r_timestamp,
+		        input->pid,
+		        input->comm,
+		        input->state,
+		        input->ppid,
+				input->utime,
+				input->stime,
+				input->rssKb,
+		        input->read_kbytes,
+		        input->write_kbytes,
+				input->threads
+		    );
+		fclose(PSN_pfJsonFile);
+	}
+	else
+	{
+		fprintf(stderr,"write_output_to_json: failed to open json file");
+	}
 }
 
 static int read_proc_threads(pid_t pid)
@@ -369,7 +425,7 @@ process_snapshot_status collect_snapshot(void)
 	}
 	process_state_input_t process_data;
 
-	print_timestamp(&process_data.timestamp);
+	print_timestamp(&process_data.timestamp, process_data.h_r_timestamp);
 	log_data(PSN_pfOutputFile," SNAPSHOT START ################# \n");
 
 	struct dirent *de;
@@ -394,6 +450,9 @@ process_snapshot_status collect_snapshot(void)
 
 			//feed the data to process_stat
 			process_stats_update(&process_data);
+
+			//generate json file
+			write_output_to_json(&process_data);
 		}
 
 	}

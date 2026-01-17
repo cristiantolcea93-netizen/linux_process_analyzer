@@ -21,5 +21,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/args_parser"
     "${CMAKE_CURRENT_SOURCE_DIR}/process_stats"
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/uthash"
+    "${CMAKE_CURRENT_SOURCE_DIR}/config"
 )
 

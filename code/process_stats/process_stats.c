@@ -6,6 +6,8 @@
 #include <unistd.h>     // sysconf (CPU usage)
 #include "uthash.h"
 #include "process_stats.h"
+#include "process_snapshot.h"
+#include "config.h"
 
 
 typedef struct{
@@ -57,6 +59,7 @@ typedef struct{
 
 static process_state_t *g_process_table = NULL;
 static bool is_module_initialized = false;
+static FILE* pfJsonOutput = NULL;
 
 static process_state_t *get_or_create_process(const process_state_input_t *input)
 {
@@ -206,6 +209,65 @@ static void calculate_io_data(process_state_input_t* input,process_state_t* proc
     proc_state->prev_timestamp    = input->timestamp;
 }
 
+static bool open_metrics_file(void)
+{
+	bool retVal = false;
+	int path_length = snprintf(NULL, 0, "%s/%s", CONFIG_LOG_DIR, CONFIG_METRICS_JSON) + 1;
+	char* openfilePath = malloc(path_length);
+
+	if(openfilePath == NULL)
+	{
+		fprintf(stderr,"process_stats_initialize: failed to allocate memory for openfilePath!\n");
+	}
+	else
+	{
+		snprintf(openfilePath, path_length, "%s/%s", CONFIG_LOG_DIR, CONFIG_METRICS_JSON);
+		if(process_snapshot_success == make_log_dir())
+		{
+			pfJsonOutput = fopen(openfilePath, "w");
+			if(pfJsonOutput != NULL)
+			{
+				//all good
+				retVal = true;
+			}
+			else
+			{
+				fprintf(stderr,"process_stats_initialize: failed to open %s\n", openfilePath);
+			}
+		}
+		else
+		{
+			//failed to create directory
+		}
+		free(openfilePath);
+	}
+	return retVal;
+}
+
+static void write_metric_to_json(process_stats_metrics_arguments * args, process_state_t *ps, process_state_t **arr, int n)
+{
+	int i;
+	if (args->cpu_average_requested) {
+
+		fprintf(pfJsonOutput, "\"cpu_average\":[\n");
+		for (i = 0; i < n; i++) {
+			ps = arr[i];
+			fprintf(pfJsonOutput,
+					" {\"pid\":%d,\"comm\":\"%s\",\"state\":\"%c\","
+					"\"avg_cpu\":%.2f,\"threads\":%d,\"records\":%lu}%s\n",
+					ps->pid,
+					ps->comm,
+					ps->state,
+					ps->average_cpu_usage,
+					ps->threads,
+					ps->number_of_records,
+					(i + 1 < n) ? "," : ""
+			);
+		}
+		fprintf(pfJsonOutput, "]");
+	}
+}
+
 void process_stats_snapshot_end(void)
 {
 	/**un-commenting this code optimizes memory usage of this tool but will cause processes
@@ -245,6 +307,9 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 
 		int i = 0;
 		process_state_t *ps, *tmp;
+
+		bool boWriteMetricsFile = open_metrics_file();
+
 		HASH_ITER(hh, g_process_table, ps, tmp)
 		{
 			arr[i++] = ps;
@@ -288,6 +353,12 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+
+			if(true == boWriteMetricsFile)
+			{
+				write_metric_to_json(args,ps,arr,n);
+			}
+
 		}
 
 		if(true == args->rss_average_requested)
@@ -426,8 +497,12 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 			}
 		}
 
-
 		free(arr);
+
+		if(true == boWriteMetricsFile)
+		{
+			fclose(pfJsonOutput);
+		}
 	}
 	else
 	{

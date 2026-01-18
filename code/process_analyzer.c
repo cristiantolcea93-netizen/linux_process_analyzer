@@ -129,7 +129,7 @@ int main(int argc, char **argv)
 				noOfIterations++;
 			}
 			//print end of execution metrics
-			process_stats_print_metrics(&(gArguments.end_metrics_args));
+			process_stats_print_metrics(&(gArguments.end_metrics_args),gArguments.interval_ms);
 		}
 		else
 		{

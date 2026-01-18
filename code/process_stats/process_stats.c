@@ -1,11 +1,17 @@
-#include <stdio.h>		//fprintf, stderr
-#include <stdlib.h>     // calloc, free
-#include <string.h>     // strncpy
-#include <stdbool.h>    // bool
-#include <sys/types.h>  // pid_t
-#include <unistd.h>     // sysconf (CPU usage)
+#define _XOPEN_SOURCE 700 	// strptime
+#define _GNU_SOURCE 		// timegm
+#include <stdio.h>			// fprintf, stderr
+#include <stdlib.h>     	// calloc, free
+#include <string.h>     	// strncpy
+#include <stdbool.h>    	// bool
+#include <sys/types.h>  	// pid_t
+#include <unistd.h>     	// sysconf (CPU usage)
+#include <time.h>			// strptime, timegm
 #include "uthash.h"
 #include "process_stats.h"
+#include "process_snapshot.h"
+#include "config.h"
+#include "args_parser.h"
 
 
 typedef struct{
@@ -55,8 +61,101 @@ typedef struct{
 	UT_hash_handle hh;
 } process_state_t;
 
+typedef enum {
+	METRIC_DOUBLE,
+	METRIC_INT64,
+	METRIC_UINT64
+} metric_value_type_t;
+
+typedef struct {
+	const char *json_key;            // "e.g. cpu_average"
+	const char *value_key;           // "e.g. cpu_average"
+	metric_value_type_t value_type;
+	double   (*get_double)(process_state_t *);
+	int64_t  (*get_int64)(process_state_t *);
+} metric_desc_t;
+
+
 static process_state_t *g_process_table = NULL;
 static bool is_module_initialized = false;
+static const char* prog_name;
+static FILE* pfJsonOutput = NULL;
+static uint64_t g_number_of_snapshots = 0;
+static char h_r_initial_timestamp[64];
+static char h_r_last_timestamp[64];
+static bool boIsFirstJsonMetric;
+
+static double get_avg_cpu(process_state_t *ps);
+static int64_t get_avg_rss(process_state_t *ps);
+static int64_t get_rss_increase(process_state_t *ps);
+static int64_t get_total_read(process_state_t *ps);
+static double get_avg_read_rate(process_state_t *ps);
+static int64_t get_total_write(process_state_t *ps);
+static double get_avg_write_rate(process_state_t *ps);
+static int64_t get_rss_delta(process_state_t *ps);
+
+typedef enum
+{
+	avg_cpu = 0,
+	avg_rss = 1,
+	rss_incr = 2,
+	rss_delta = 3,
+	bytes_read = 4,
+	read_rate = 5,
+	written_bytes = 6,
+	write_rate = 7
+}t_metrics;
+
+static const metric_desc_t g_metrics[] = {
+		{
+			.json_key = "cpu_average",
+			.value_key = "cpu_avg_pct",
+			.value_type = METRIC_DOUBLE,
+			.get_double = get_avg_cpu
+		},
+		{
+			.json_key = "rss_average",
+			.value_key = "rss_avg_kb",
+			.value_type = METRIC_INT64,
+			.get_int64 = get_avg_rss
+		},
+		{
+			.json_key = "rss_increase",
+			.value_key = "rss_incr_kb",
+			.value_type = METRIC_INT64,
+			.get_int64 = get_rss_increase
+		},
+		{
+			.json_key = "rss_delta",
+			.value_key = "rss_delta_kb",
+			.value_type = METRIC_INT64,
+			.get_int64 = get_rss_delta
+		},
+		{
+			.json_key = "bytes_read",
+			.value_key = "bytes_read_kb",
+			.value_type = METRIC_INT64,
+			.get_int64 = get_total_read
+		},
+		{
+			.json_key = "read_rate",
+			.value_key = "read_rate_kbps",
+			.value_type = METRIC_DOUBLE,
+			.get_double = get_avg_read_rate
+		},
+		{
+			.json_key = "written_bytes",
+			.value_key = "writen_bytes_kb",
+			.value_type = METRIC_INT64,
+			.get_int64 = get_total_write
+		},
+		{
+			.json_key = "write_rate",
+			.value_key = "write_rate_kbps",
+			.value_type = METRIC_DOUBLE,
+			.get_double = get_avg_write_rate
+		}
+	};
 
 static process_state_t *get_or_create_process(const process_state_input_t *input)
 {
@@ -206,8 +305,273 @@ static void calculate_io_data(process_state_input_t* input,process_state_t* proc
     proc_state->prev_timestamp    = input->timestamp;
 }
 
+static void open_metrics_file(void)
+{
+	int path_length = snprintf(NULL, 0, "%s/%s", CONFIG_LOG_DIR, CONFIG_METRICS_JSON) + 1;
+	char* openfilePath = malloc(path_length);
+
+	if(openfilePath == NULL)
+	{
+		fprintf(stderr,"process_stats_initialize: failed to allocate memory for openfilePath!\n");
+	}
+	else
+	{
+		snprintf(openfilePath, path_length, "%s/%s", CONFIG_LOG_DIR, CONFIG_METRICS_JSON);
+		if(process_snapshot_success == make_log_dir())
+		{
+			pfJsonOutput = fopen(openfilePath, "w");
+			if(pfJsonOutput != NULL)
+			{
+				//all good
+			}
+			else
+			{
+				fprintf(stderr,"process_stats_initialize: failed to open %s\n", openfilePath);
+			}
+		}
+		else
+		{
+			//failed to create directory
+		}
+		free(openfilePath);
+	}
+}
+
+static char *get_hostname_alloc(void)
+{
+    long max_len = -1;
+
+#ifdef HOST_NAME_MAX
+    max_len = HOST_NAME_MAX;
+#else
+    max_len = sysconf(_SC_HOST_NAME_MAX);
+#endif
+
+    if (max_len <= 0)
+        max_len = 256; // fallback to 256
+
+    /* +1 for null terminator */
+    size_t buf_len = (size_t)max_len + 1;
+
+    /* calloc → zero-init */
+    char *hostname = calloc(buf_len, 1);
+    if (!hostname)
+        return NULL;
+
+    if (gethostname(hostname, buf_len) != 0)
+    {
+        free(hostname);
+        return NULL;
+    }
+    return hostname;
+}
+
+static void metrics_json_begin(
+        uint64_t snapshot_count,
+        uint32_t interval_ms,
+        const char *version,
+        const char *start_time_iso,
+        const char *end_time_iso,
+        double duration_sec)
+{
+
+	char *hostname = get_hostname_alloc();
+	if (!hostname)
+	    hostname = strdup("unknown");
+
+	boIsFirstJsonMetric = true;
+
+    fprintf(pfJsonOutput,
+        "{\n"
+        "\t\"meta\": {\n"
+        "\t\t\"tool\": \"process_analyzer\",\n"
+        "\t\t\"version\": \"%s\",\n"
+        "\t\t\"hostname\": \"%s\",\n"
+        "\t\t\"interval_ms\": %u,\n"
+        "\t\t\"start_time\": \"%s\",\n"
+        "\t\t\"end_time\": \"%s\",\n"
+        "\t\t\"duration_sec\": %.3f,\n"
+        "\t\t\"snapshots\": %lu\n"
+        "\t},\n"
+        "\t\"metrics\": {\n",
+        version,
+        hostname,
+        interval_ms,
+        start_time_iso,
+        end_time_iso,
+        duration_sec,
+        snapshot_count
+    );
+
+    free(hostname);
+
+}
+
+
+static void write_metric_block_json(const metric_desc_t *m, process_state_t **arr, int n)
+{
+	int i;
+
+	if(pfJsonOutput != NULL)
+	{
+		if(false  == boIsFirstJsonMetric)
+		{
+			// add comma for the previous metric
+			fprintf(pfJsonOutput, ",\n");
+		}
+		else
+		{
+
+			boIsFirstJsonMetric = false;
+		}
+		fprintf(pfJsonOutput, "\t\t\"%s\":[\n", m->json_key);
+
+			for (i = 0; i < n; i++) {
+				process_state_t *ps = arr[i];
+
+				fprintf(pfJsonOutput,
+					"\t\t\t{\n"
+					"\t\t\t\"pid\": %d,\n"
+					"\t\t\t\"comm\": \"%s\",\n"
+					"\t\t\t\"state\": \"%c\",\n",
+					ps->pid,
+					ps->comm,
+					ps->state
+				);
+
+				if (m->value_type == METRIC_DOUBLE) {
+					fprintf(pfJsonOutput,
+						"\t\t\t\"%s\": %.2f,\n",
+						m->value_key,
+						m->get_double(ps)
+					);
+				} else {
+					fprintf(pfJsonOutput,
+						"\t\t\t\"%s\": %lld,\n",
+						m->value_key,
+						(long long)m->get_int64(ps)
+					);
+				}
+
+				fprintf(pfJsonOutput,
+					"\t\t\t\"threads\": %d,\n"
+					"\t\t\t\"records\": %lu\n"
+					"\t\t\t}%s\n",
+					ps->threads,
+					ps->number_of_records,
+					(i + 1 < n) ? "," : ""
+				);
+			}
+
+			fprintf(pfJsonOutput, "\t\t]");
+	}
+
+}
+
+
+static void metrics_json_end(void)
+{
+	if(pfJsonOutput != NULL)
+	{
+		fprintf(pfJsonOutput,
+				"\n"
+				"\t}\n"
+				"}\n"
+		);
+		fclose(pfJsonOutput);
+		boIsFirstJsonMetric = true;
+		pfJsonOutput = NULL;
+	}
+
+}
+
+static double parse_timestamp_to_double(const char *ts)
+{
+	struct tm tm = {0};
+	char *ms_part;
+	double seconds;
+
+	/* Parse "YYYY-MM-DD HH:MM:SS" */
+	if (!strptime(ts, "%Y-%m-%d %H:%M:%S", &tm))
+		return -1.0;
+
+	/* Convert to epoch seconds */
+	seconds = (double)timegm(&tm);
+
+	/* Parse milliseconds if present */
+	ms_part = strchr(ts, '.');
+	if (ms_part)
+	{
+		int ms = atoi(ms_part + 1);
+		seconds += ms / 1000.0;
+	}
+
+	return seconds;
+}
+
+static double get_snapshot_duration(const char* h_r_initial_timestamp, const char* h_r_last_timestamp)
+{
+	double start_time = parse_timestamp_to_double(h_r_initial_timestamp);
+	double end_time = parse_timestamp_to_double(h_r_last_timestamp);
+	double duration_sec = 0.0;
+
+	if (start_time > 0 && end_time > 0 && end_time >= start_time)
+	{
+		duration_sec = end_time - start_time;
+	}
+	return duration_sec;
+}
+
+static double get_avg_cpu(process_state_t *ps)
+{
+	return ps->average_cpu_usage;
+}
+
+static int64_t get_avg_rss(process_state_t *ps)
+{
+	return ps->rss_average_kb;
+}
+
+static int64_t get_rss_increase(process_state_t *ps)
+{
+	return ps->rss_variation_since_startup;
+}
+
+static int64_t get_total_read(process_state_t *ps)
+{
+	return ps->total_read_kbytes;
+}
+
+static double get_avg_read_rate(process_state_t *ps)
+{
+	return ps->avg_read_rate_kb_s;
+}
+
+static int64_t get_total_write(process_state_t *ps)
+{
+	return ps->total_write_kbytes;
+}
+
+static double get_avg_write_rate(process_state_t *ps)
+{
+	return ps->avg_write_rate_kb_s;
+}
+
+static int64_t get_rss_delta(process_state_t *ps)
+{
+	return ps->rss_variation_since_startup;
+}
+
+
+
 void process_stats_snapshot_end(void)
 {
+	if(true == is_module_initialized)
+	{
+		g_number_of_snapshots++;
+	}
+
+
 	/**un-commenting this code optimizes memory usage of this tool but will cause processes
 	 * which ended before the analyzer to be missed from the end of the execution analysis*/
 #if 0
@@ -228,12 +592,13 @@ void process_stats_snapshot_end(void)
 #endif
 }
 
-void process_stats_initialize(void)
+void process_stats_initialize(const char* prog)
 {
 	is_module_initialized = true;
+	prog_name = prog;
 }
 
-void process_stats_print_metrics(process_stats_metrics_arguments * args)
+void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_t interval_ms)
 {
 	if(true == is_module_initialized)
 	{
@@ -245,6 +610,14 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 
 		int i = 0;
 		process_state_t *ps, *tmp;
+
+		open_metrics_file();
+
+		double duration_sec = get_snapshot_duration((const char*)h_r_initial_timestamp,(const char*) h_r_last_timestamp);
+
+
+		metrics_json_begin(g_number_of_snapshots, interval_ms, PROCESS_ANALYZER_VERSION, h_r_initial_timestamp, h_r_last_timestamp, duration_sec);
+
 		HASH_ITER(hh, g_process_table, ps, tmp)
 		{
 			arr[i++] = ps;
@@ -288,6 +661,8 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+
+			write_metric_block_json(&g_metrics[avg_cpu],arr,n);
 		}
 
 		if(true == args->rss_average_requested)
@@ -308,6 +683,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+			write_metric_block_json(&g_metrics[avg_rss],arr,n);
 		}
 
 		if(true == args->rss_increase_requested)
@@ -327,6 +703,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+			write_metric_block_json(&g_metrics[rss_incr],arr,n);
 		}
 
 		if(true == args->rss_delta_requested)
@@ -346,6 +723,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+			write_metric_block_json(&g_metrics[rss_delta],arr,n);
 
 		}
 
@@ -366,6 +744,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+			write_metric_block_json(&g_metrics[bytes_read],arr,n);
 
 		}
 
@@ -386,6 +765,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+			write_metric_block_json(&g_metrics[written_bytes],arr,n);
 		}
 
 		if(true == args->read_rate_requested)
@@ -405,6 +785,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+			write_metric_block_json(&g_metrics[read_rate],arr,n);
 		}
 
 		if(true == args->write_rate_requested)
@@ -424,10 +805,12 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args)
 						ps->threads,
 						ps->number_of_records);
 			}
+			write_metric_block_json(&g_metrics[write_rate],arr,n);
 		}
 
-
 		free(arr);
+
+		metrics_json_end();
 	}
 	else
 	{
@@ -442,6 +825,17 @@ void process_stats_update(process_state_input_t* input)
 	{
 		process_state_t* proc_state = get_or_create_process(input);
 
+		if(0 == strlen(h_r_initial_timestamp))
+		{
+			/*initial timestamp not initialized, initialize it*/
+			strncpy(h_r_initial_timestamp, input->h_r_timestamp,64);
+			strncpy(h_r_last_timestamp, input->h_r_timestamp,64);
+		}
+		else
+		{
+			/*save the latest timestamp*/
+			strncpy(h_r_last_timestamp, input->h_r_timestamp,64);
+		}
 		if(proc_state)
 		{
 			unsigned long curr_ticks = input->utime + input->stime;

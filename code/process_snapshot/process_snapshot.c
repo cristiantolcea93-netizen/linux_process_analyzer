@@ -15,39 +15,32 @@
 
 #include "process_snapshot.h"
 #include "process_stats.h"
+#include "config.h"
 
 #define PROC_PATH "/proc"
 
 
-#define PSN_MAX_LOG_SIZE   (5 * 1024 * 1024)  // 5 MB
-#define PSN_MAX_ROTATIONS  3
 
-/*todo: replace this with configuration option*/
-#define PSN_LOG_DIR   "/tmp/ptime"
-#define PSN_LOG_FILE  "ptime.log"
-
-#define PSN_FULL_FILE_PATH "/tmp/ptime/ptime.log"
-
-#define PSN_LOCK_FILE "/tmp/ptime/ptime.lock"
 
 static FILE* PSN_pfOutputFile = NULL;
+static FILE* PSN_pfOutputJsonlFile = NULL;
 static int g_lock_fd = -1;
 
 static void log_data(FILE* file, const char* fmt, ...);
-static void print_timestamp(double *timestampInSeconds);
+static void print_timestamp(double *timestamp, char* hr_timestamp);
 static int is_numeric(const char *s);
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
 static int read_proc_threads(pid_t pid);
-static process_snapshot_status make_log_dir(void);
 static off_t get_file_size(const char *path);
-static void rotate_logs(void);
+static void rotate_logs(char* filePath);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static int read_rss_status(pid_t pid, long *rss_kb);
+static void write_output_to_json(process_state_input_t* input);
 
 
 static process_snapshot_status acquire_lock(void)
 {
-	g_lock_fd = open(PSN_LOCK_FILE, O_CREAT | O_RDWR, 0644);
+	g_lock_fd = open(CONFIG_LOCK_FILE, O_CREAT | O_RDWR, 0644);
 	if (g_lock_fd < 0)
 	{
 		printf("acquire_lock: failed to open lock file\n");
@@ -80,29 +73,29 @@ static off_t get_file_size(const char *path)
     return st.st_size;
 }
 
-static void rotate_logs(void)
+static void rotate_logs(char* filePath)
 {
     char old_path[256], new_path[256];
 
     // remove the oldest log entry
     snprintf(old_path, sizeof(old_path),
-             "%s/%s.%d", PSN_LOG_DIR, PSN_LOG_FILE, PSN_MAX_ROTATIONS);
+             "%s.%d", filePath, CONFIG_MAX_ROTATIONS);
     unlink(old_path);
 
     // rename .N-1 -> .N
-    for (int i = PSN_MAX_ROTATIONS - 1; i >= 1; i--) {
+    for (int i = CONFIG_MAX_ROTATIONS - 1; i >= 1; i--) {
         snprintf(old_path, sizeof(old_path),
-                 "%s/%s.%d", PSN_LOG_DIR, PSN_LOG_FILE, i);
+                 "%s.%d", filePath, i);
         snprintf(new_path, sizeof(new_path),
-                 "%s/%s.%d", PSN_LOG_DIR, PSN_LOG_FILE, i + 1);
+                 "%s.%d", filePath, i + 1);
         rename(old_path, new_path);
     }
 
     // current log -> .1
     snprintf(old_path, sizeof(old_path),
-             "%s/%s", PSN_LOG_DIR, PSN_LOG_FILE);
+             "%s", filePath);
     snprintf(new_path, sizeof(new_path),
-             "%s/%s.1", PSN_LOG_DIR, PSN_LOG_FILE);
+             "%s.1", filePath);
     rename(old_path, new_path);
 }
 
@@ -126,7 +119,7 @@ static void log_data(FILE* file, const char* fmt, ...)
 	}
 }
 
-static void print_timestamp(double *timestamp)
+static void print_timestamp(double *timestamp, char* hr_timestamp)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts); // seconds + nanoseconds
@@ -134,9 +127,26 @@ static void print_timestamp(double *timestamp)
     struct tm tm_info;
     localtime_r(&sec, &tm_info);
 
-    char buf[64];
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
-    log_data(PSN_pfOutputFile,"[%s.%03ld] ", buf, ts.tv_nsec / 1000000); // milliseconds
+  //  char buf[64];
+  //  strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
+  //  log_data(PSN_pfOutputFile,"[%s.%03ld] ", buf, ts.tv_nsec / 1000000); // milliseconds
+
+
+    snprintf(
+            hr_timestamp,
+            64,
+            "%04d-%02d-%02d %02d:%02d:%02d.%03ld",
+            tm_info.tm_year + 1900,
+            tm_info.tm_mon + 1,
+            tm_info.tm_mday,
+            tm_info.tm_hour,
+            tm_info.tm_min,
+            tm_info.tm_sec,
+            ts.tv_nsec / 1000000
+        );
+
+    log_data(PSN_pfOutputFile, "[%s] ", hr_timestamp);
+
 
     clock_gettime(CLOCK_MONOTONIC, &ts);
     //monotonic fractional timestamp
@@ -239,7 +249,6 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 		len = sizeof(proc_data->comm) - 1;
 	memcpy(proc_data->comm, lparen + 1, len);
 
-	pid_t ppid;
 	/*
 	 * Continue parsing AFTER ") "
 	 */
@@ -248,7 +257,7 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 			"%*d %*d %*d %*d %*u %*u %*u %*u %*u "
 			"%lu %lu ",       /* utime, stime */
 			&proc_data->state,//&state,
-			&ppid,
+			&proc_data->ppid,
 			&proc_data->utime,//&utime,
 			&proc_data->stime//&stime,
 	);
@@ -270,9 +279,46 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 
 
 	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld ",
-			pid, proc_data->comm, proc_data->state, ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes);
+			pid, proc_data->comm, proc_data->state, proc_data->ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes);
 
 	return 0;
+}
+
+static void write_output_to_json(process_state_input_t* input)
+{
+	if(PSN_pfOutputJsonlFile)
+	{
+		fprintf(PSN_pfOutputJsonlFile,
+		        "{"
+		        "\"timestamp\":\"%s\","
+		        "\"pid\":%d,"
+		        "\"comm\":\"%s\","
+		        "\"state\":\"%c\","
+		        "\"ppid\":%d,"
+		        "\"utime\":%lu,"
+		        "\"stime\":%lu,"
+		        "\"rss_kb\":%ld,"
+		        "\"io_read_kb\":%lld,"
+		        "\"io_write_kb\":%lld,"
+		        "\"threads\":%d"
+		        "}\n",
+				input->h_r_timestamp,
+		        input->pid,
+		        input->comm,
+		        input->state,
+		        input->ppid,
+				input->utime,
+				input->stime,
+				input->rssKb,
+		        input->read_kbytes,
+		        input->write_kbytes,
+				input->threads
+		    );
+	}
+	else
+	{
+		fprintf(stderr,"write_output_to_json: failed to open json file");
+	}
 }
 
 static int read_proc_threads(pid_t pid)
@@ -297,11 +343,11 @@ static int read_proc_threads(pid_t pid)
     return threads;
 }
 
-static process_snapshot_status make_log_dir(void)
+process_snapshot_status make_log_dir(void)
 {
 	process_snapshot_status l_retVal;
 
-	if (mkdir(PSN_LOG_DIR, 0755) < 0)
+	if (mkdir(CONFIG_LOG_DIR, 0755) < 0)
 	{
 		if (errno == EEXIST)
 		{
@@ -326,16 +372,18 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 {
 	struct dirent *ent;
 
-	DIR *dir = opendir(PSN_LOG_DIR);
-	if (dir != NULL) {
+	DIR *dir = opendir(CONFIG_LOG_DIR);
+	if (dir != NULL)
+	{
 		/* scan the directory */
 		while ((ent = readdir(dir)) != NULL)
 		{
-			if (strncmp(ent->d_name, PSN_LOG_FILE,strlen(PSN_LOG_FILE)) == 0)
+			if ((strncmp(ent->d_name, CONFIG_LOG_FILE,strlen(CONFIG_LOG_FILE)) == 0) ||
+					(strncmp(ent->d_name, CONFIG_JSON_FILE,strlen(CONFIG_JSON_FILE)) == 0))
 			{
 				/*remove only the files created by the tool*/
 				char deletefilePath[512];
-				snprintf(deletefilePath, sizeof(deletefilePath), "%s/%s", PSN_LOG_DIR, ent->d_name);
+				snprintf(deletefilePath, sizeof(deletefilePath), "%s/%s", CONFIG_LOG_DIR, ent->d_name);
 
 				if(0 == remove(deletefilePath))
 				{
@@ -344,7 +392,7 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 				else
 				{
 					closedir (dir);
-					fprintf(stderr, "process_snapshot_delete_old_files: Failed to remove old file %s", ent->d_name);
+					fprintf(stderr, "process_snapshot_delete_old_files: Failed to remove old file %s\n", ent->d_name);
 					return  process_snapshot_error;
 				}
 			}
@@ -353,9 +401,18 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 	}
 	else
 	{
-		/* could not open directory */
-		fprintf(stderr, "process_snapshot_delete_old_files: Failed to open dir %s", PSN_LOG_DIR);
-		return process_snapshot_error;
+		if(errno ==  ENOENT)
+		{
+			/*directory doesn't exist - this is not an error*/
+			return process_snapshot_success;
+		}
+		else
+		{
+			/* could not open directory */
+			fprintf(stderr, "process_snapshot_delete_old_files: Failed to open dir %s\n", CONFIG_LOG_DIR);
+			return process_snapshot_error;
+		}
+
 	}
 	return process_snapshot_success;
 }
@@ -369,7 +426,7 @@ process_snapshot_status collect_snapshot(void)
 	}
 	process_state_input_t process_data;
 
-	print_timestamp(&process_data.timestamp);
+	print_timestamp(&process_data.timestamp, process_data.h_r_timestamp);
 	log_data(PSN_pfOutputFile," SNAPSHOT START ################# \n");
 
 	struct dirent *de;
@@ -394,6 +451,9 @@ process_snapshot_status collect_snapshot(void)
 
 			//feed the data to process_stat
 			process_stats_update(&process_data);
+
+			//generate json file
+			write_output_to_json(&process_data);
 		}
 
 	}
@@ -408,7 +468,7 @@ process_snapshot_status process_snapshot_initialize(void)
 {
 	process_snapshot_status retVal;
 	char openfilePath[256];
-	snprintf(openfilePath, sizeof(openfilePath), "%s/%s", PSN_LOG_DIR, PSN_LOG_FILE);
+	snprintf(openfilePath, sizeof(openfilePath), "%s/%s", CONFIG_LOG_DIR, CONFIG_LOG_FILE);
 
 	retVal = make_log_dir();
 
@@ -418,9 +478,9 @@ process_snapshot_status process_snapshot_initialize(void)
 		if(process_snapshot_success == retVal)
 		{
 			off_t size = get_file_size(openfilePath);
-			if (size >= PSN_MAX_LOG_SIZE)
+			if (size >= CONFIG_MAX_LOG_SIZE)
 			{
-				rotate_logs();
+				rotate_logs(openfilePath);
 			}
 
 			PSN_pfOutputFile = fopen(openfilePath, "a");
@@ -428,12 +488,34 @@ process_snapshot_status process_snapshot_initialize(void)
 			if(!PSN_pfOutputFile)
 			{
 				retVal = process_snapshot_error;
-				printf("process_snapshot_initialize: Failed to open output file!\n");
+				fprintf(stderr, "process_snapshot_initialize: Failed to open output file!\n");
 			}
 			else
 			{
 				retVal = process_snapshot_success;
 			}
+
+			//jsonl file handling
+			memset(openfilePath, 0x00, sizeof(openfilePath));
+			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", CONFIG_LOG_DIR, CONFIG_JSON_FILE);
+			size = get_file_size(openfilePath);
+
+			if (size >= CONFIG_MAX_LOG_SIZE)
+			{
+				rotate_logs(openfilePath);
+			}
+
+			PSN_pfOutputJsonlFile = fopen(openfilePath, "a");
+			if(!PSN_pfOutputJsonlFile)
+			{
+				retVal = process_snapshot_error;
+				fprintf(stderr, "process_snapshot_initialize: Failed to open jsonl output file!\n");
+			}
+			else
+			{
+				retVal = process_snapshot_success;
+			}
+
 		}
 		else
 		{
@@ -462,6 +544,14 @@ void process_snapshot_deinit(void)
 		if(fclose(PSN_pfOutputFile)!=0)
 		{
 			fprintf(stderr, "process_snapshot_deinit: Failed to close PSN_pfOutputFile!\n");
+		}
+	}
+
+	if(PSN_pfOutputJsonlFile)
+	{
+		if(fclose(PSN_pfOutputJsonlFile)!=0)
+		{
+			fprintf(stderr, "process_snapshot_deinit: Failed to close PSN_pfOutputJsonlFile!\n");
 		}
 	}
 }

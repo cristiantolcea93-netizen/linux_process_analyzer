@@ -37,19 +37,21 @@ typedef struct
 	pid_t pid;
 	char comm[64];
 	char state;
+	pid_t ppid;
 	unsigned long utime;
 	unsigned long stime;
 	long rssKb;
 	double timestamp;
+	char h_r_timestamp[64];
 	int threads;
 	unsigned long long read_kbytes;
 	unsigned long long write_kbytes;
 }process_state_input_t;
 
-extern void process_stats_initialize(void);
+extern void process_stats_initialize(const char* prog);
 extern void process_stats_update(process_state_input_t* input);
 extern void process_stats_snapshot_end(void);
-extern void process_stats_print_metrics(process_stats_metrics_arguments * args);
+extern void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_t interval_ms);
 
 
 

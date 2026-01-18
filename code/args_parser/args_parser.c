@@ -270,7 +270,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 	   (true == cfg->end_metrics_args.write_rate_requested))
 	{
 		// initialize process stats only if at least one metric was requested
-		process_stats_initialize();
+		process_stats_initialize(argv[0]);
 	}
 
 	return parse_args_ok;

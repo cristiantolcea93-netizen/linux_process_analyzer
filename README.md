@@ -14,7 +14,7 @@ The tool is designed for **low-overhead monitoring**, accurate **time-based calc
   - Average RSS
   - RSS increase since startup
   - RSS delta
-- Disk I/O metrics per process:
+- Disk I/O s per process:
   - Total bytes read / written
   - Average disk read/write rate (KB/s)
 - Snapshot logging with log rotation
@@ -24,14 +24,28 @@ The tool is designed for **low-overhead monitoring**, accurate **time-based calc
 
 ---
 
+## Typical Use Cases
+
+- Investigating long-running background processes
+- Identifying disk-heavy applications over time
+- Post-mortem analysis after performance degradation
+
+## What this tool is NOT
+
+- Not a real-time interactive monitor (like `top` or `htop`)
+- Not a system-wide resource accounting tool
+- Not intended for per-thread profiling
+
+
 ## How It Works
 
 At each sampling interval, the tool:
 - Reads process data from `/proc/[pid]/stat`, `/proc/[pid]/status`, and `/proc/[pid]/io`
-- Stores a snapshot of all running processes
+- Stores a snapshot of all running processes (in text and jsonl format)
 - Accumulates statistics over time using **monotonic timestamps**
+- Designed to minimize per-sample overhead even at small intervals (tens of milliseconds)
 
-At the end of execution (or when interrupted), the requested metrics are calculated and displayed.
+At the end of execution (or when interrupted), the requested s are calculated and displayed on the console + a metrics.json file is generated.
 
 ---
 
@@ -53,7 +67,7 @@ This guarantees stable measurements even if the system clock changes.
 
 ### Mandatory options
 
-The following options are **required** for any analysis to run:
+The following options are **required** for the tool to run and collect snapshots:
 
 - `-i`, `--interval <dur>` — sampling interval  
 - `-n`, `--count <N>` — number of snapshots (`infinity` is allowed)
@@ -99,7 +113,16 @@ If either of these is missing, argument validation will fail.
 ```
 
 Stop the program using `CTRL+C`.  
-The tool will print the aggregated statistics before exiting.
+The tool will print the aggregated statistics and generate a json file (metrics.json) before exiting. For now, the metrics.json file is generated at the end of the execution as long as any metric is requested via at least one of the following CLI parameters:
+
+- `--cpu_usage`
+- `--rss_usage`
+- `--rss_increase`
+- `--rss_delta`
+- `--bytes_read`
+- `--bytes_write`
+- `--read_rate`
+- `--write_rate`
 
 ---
 
@@ -107,8 +130,9 @@ The tool will print the aggregated statistics before exiting.
 
 Each sampling iteration is logged as a snapshot.
 
-Example snapshot entry:
+Example snapshot entries:
 
+1) Text format
 ```
 [2026-01-11 19:19:49.611] SNAPSHOT START #################
 PID=1548 COMM=systemd STATE=S PPID=1 UTIME=71 STIME=21 RSS(KB)=12592 IOR(KB)=0 IOW(KB)=0 THREADS=1
@@ -116,22 +140,35 @@ PID=1558 COMM=pipewire STATE=S PPID=1548 UTIME=2514 STIME=2346 RSS(KB)=16776 IOR
 ...
 SNAPSHOT END #################
 ```
+2) jsonl format
+```
+{"timestamp":"2026-01-19 21:47:41.677","pid":2603,"comm":"eclipse","state":"S","ppid":1800,"utime":7,"stime":1,"rss_kb":23376,"io_read_kb":640,"io_write_kb":0,"threads":5}
+{"timestamp":"2026-01-19 21:47:41.677","pid":2618,"comm":"java","state":"S","ppid":2603,"utime":19907,"stime":1161,"rss_kb":1129624,"io_read_kb":212404,"io_write_kb":16744,"threads":70}
+{"timestamp":"2026-01-19 21:47:41.677","pid":2677,"comm":"nautilus","state":"S","ppid":1515,"utime":204,"stime":32,"rss_kb":178828,"io_read_kb":6132,"io_write_kb":80,"threads":19}
+```
 
 ---
 
 ## Log Storage & Rotation
 
-Snapshots are stored in:
+- Snapshots (text + jsonl)
+- s.json file generated at the end are stored in:
 
 ```
 /tmp/ptime/
 ```
 
-Log rotation is enabled:
-- Maximum of **4 log files**
+Log rotation is enabled for both text and jsonl files:
+- Maximum of **4 log files** of each type
 - Maximum size per file: **5 MB**
 
 ---
+
+## JSON Output
+
+- `s.json` follows a versioned schema
+- Schema documentation is available in `SCHEMA.md`
+- Snapshot data is written in JSON Lines format (`.jsonl`)
 
 ## Build Instructions
 
@@ -159,6 +196,8 @@ code/
 ├── args_parser/
 │   ├── args_parser.c
 │   └── args_parser.h
+├── config/
+│   ├── config.h
 ├── process_snapshot/
 │   ├── process_snapshot.c
 │   └── process_snapshot.h
@@ -178,7 +217,9 @@ code/
 ## Limitations & Notes
 - Requires Linux with /proc filesystem
 - Disk I/O statistics depend on kernel support for /proc/[pid]/io
-- Short-lived processes may appear appear with fewer samples
+- Short-lived processes may appear with fewer samples
+- Tested on modern Linux distributions using systemd
+
 ---
 
 ## Future improvements

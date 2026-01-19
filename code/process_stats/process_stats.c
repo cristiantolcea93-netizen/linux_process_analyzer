@@ -75,6 +75,7 @@ typedef struct {
 	int64_t  (*get_int64)(process_state_t *);
 } metric_desc_t;
 
+#define PROC_STATS_SCHEMA_VERSION "1.0"
 
 static process_state_t *g_process_table = NULL;
 static bool is_module_initialized = false;
@@ -132,7 +133,7 @@ static const metric_desc_t g_metrics[] = {
 			.get_int64 = get_rss_delta
 		},
 		{
-			.json_key = "bytes_read",
+			.json_key = "kbytes_read",
 			.value_key = "bytes_read_kb",
 			.value_type = METRIC_INT64,
 			.get_int64 = get_total_read
@@ -144,8 +145,8 @@ static const metric_desc_t g_metrics[] = {
 			.get_double = get_avg_read_rate
 		},
 		{
-			.json_key = "written_bytes",
-			.value_key = "writen_bytes_kb",
+			.json_key = "written_kbytes",
+			.value_key = "written_bytes_kb",
 			.value_type = METRIC_INT64,
 			.get_int64 = get_total_write
 		},
@@ -372,6 +373,7 @@ static void metrics_json_begin(
         const char *version,
         const char *start_time_iso,
         const char *end_time_iso,
+        const char *prog_name,
         double duration_sec)
 {
 
@@ -384,8 +386,9 @@ static void metrics_json_begin(
     fprintf(pfJsonOutput,
         "{\n"
         "\t\"meta\": {\n"
-        "\t\t\"tool\": \"process_analyzer\",\n"
+        "\t\t\"tool\": \"%s\",\n"
         "\t\t\"version\": \"%s\",\n"
+        "\t\t\"schema_version\": \"%s\",\n"
         "\t\t\"hostname\": \"%s\",\n"
         "\t\t\"interval_ms\": %u,\n"
         "\t\t\"start_time\": \"%s\",\n"
@@ -394,7 +397,9 @@ static void metrics_json_begin(
         "\t\t\"snapshots\": %lu\n"
         "\t},\n"
         "\t\"metrics\": {\n",
+        prog_name,
         version,
+        PROC_STATS_SCHEMA_VERSION,
         hostname,
         interval_ms,
         start_time_iso,
@@ -616,7 +621,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 		double duration_sec = get_snapshot_duration((const char*)h_r_initial_timestamp,(const char*) h_r_last_timestamp);
 
 
-		metrics_json_begin(g_number_of_snapshots, interval_ms, PROCESS_ANALYZER_VERSION, h_r_initial_timestamp, h_r_last_timestamp, duration_sec);
+		metrics_json_begin(g_number_of_snapshots, interval_ms, PROCESS_ANALYZER_VERSION, h_r_initial_timestamp, h_r_last_timestamp, prog_name, duration_sec);
 
 		HASH_ITER(hh, g_process_table, ps, tmp)
 		{

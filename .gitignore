@@ -1,0 +1,103 @@
+############################
+# Build artifacts
+############################
+
+# Generic build directories
+build/
+code/build/
+cmake-build-*/
+out/
+
+# C / C++ artifacts
+*.o
+*.a
+*.so
+*.so.*
+*.lo
+*.la
+*.d
+*.exe
+
+# Final binaries
+process_analyzer
+
+
+############################
+# CMake / Ninja
+############################
+
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+.ninja_log
+.ninja_deps
+
+
+############################
+# Runtime output (logs / metrics)
+############################
+
+# Default runtime directory
+/tmp/ptime/
+
+# Generated outputs
+*.log
+*.json
+*.jsonl
+
+
+############################
+# IDEs / Editors
+############################
+
+# Eclipse (root + code/)
+.project
+.cproject
+.settings/
+.clangd
+
+code/.project
+code/.cproject
+code/.settings/
+code/.clangd
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+
+# Vim / swap
+*.swp
+*.swo
+*~
+
+
+############################
+# OS files
+############################
+
+.DS_Store
+
+
+############################
+# Tests / Coverage (future-proof)
+############################
+
+coverage/
+*.gcda
+*.gcno
+*.gcov
+
+
+############################
+# Python (python_analyzers - optional cleanup)
+############################
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+

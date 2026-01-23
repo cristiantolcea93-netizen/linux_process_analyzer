@@ -281,29 +281,51 @@ static int compare_avg_write_rate(const void *a, const void *b)
 
 static void calculate_io_data(process_state_input_t* input,process_state_t* proc_state)
 {
-    if (proc_state->number_of_records > 0) {
+	if(true == input->bo_is_io_valid)
+	{
+		if (proc_state->number_of_records > 0)
+		{
+			double dt = input->timestamp - proc_state->prev_timestamp;
 
-        double dt = input->timestamp - proc_state->prev_timestamp;
+			if (dt > 0.0)
+			{
+				uint64_t read_delta  = 0;
+				uint64_t write_delta = 0;
 
-        if (dt > 0.0) {
+				if (input->read_kbytes >= proc_state->prev_read_kbytes)
+					read_delta = input->read_kbytes - proc_state->prev_read_kbytes;
 
-            uint64_t read_delta  = 0;
-            uint64_t write_delta = 0;
+				if (input->write_kbytes >= proc_state->prev_write_kbytes)
+					write_delta = input->write_kbytes - proc_state->prev_write_kbytes;
 
-            if (input->read_kbytes >= proc_state->prev_read_kbytes)
-                read_delta = input->read_kbytes - proc_state->prev_read_kbytes;
+				proc_state->total_read_kbytes  += read_delta;
+				proc_state->total_write_kbytes += write_delta;
+				proc_state->io_time_acc        += dt;
+			}
+		}
+		proc_state->prev_read_kbytes  = input->read_kbytes;
+		proc_state->prev_write_kbytes = input->write_kbytes;
+		proc_state->prev_timestamp    = input->timestamp;
+	}
 
-            if (input->write_kbytes >= proc_state->prev_write_kbytes)
-                write_delta = input->write_kbytes - proc_state->prev_write_kbytes;
+}
 
-            proc_state->total_read_kbytes  += read_delta;
-            proc_state->total_write_kbytes += write_delta;
-            proc_state->io_time_acc        += dt;
-        }
-    }
-    proc_state->prev_read_kbytes  = input->read_kbytes;
-    proc_state->prev_write_kbytes = input->write_kbytes;
-    proc_state->prev_timestamp    = input->timestamp;
+static void calculate_rss_data(process_state_input_t* input, process_state_t* proc_state)
+{
+	if(true == input->bo_is_rss_valid)
+	{
+		if(proc_state->number_of_records == 0)
+		{
+			proc_state->rss_initial_kb = input->rssKb;
+		}
+		proc_state->prev_rss_kb = input->rssKb;
+		proc_state->rss_kb = input->rssKb;
+		//calculate sum for avg rss usage
+		proc_state->rss_sum += proc_state->rss_kb;
+
+		//calculate rss variation
+		proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
+	}
 }
 
 static void open_metrics_file(void)
@@ -824,6 +846,8 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 
 }
 
+
+
 void process_stats_update(process_state_input_t* input)
 {
 	if(true == is_module_initialized)
@@ -863,19 +887,10 @@ void process_stats_update(process_state_input_t* input)
 				}
 			}
 
-			if(proc_state->number_of_records == 0)
-			{
-				proc_state->rss_initial_kb = input->rssKb;
-			}
-
-
 			proc_state->prev_cpu_ticks = curr_ticks;
-			proc_state->prev_rss_kb = input->rssKb;
-
-
 			proc_state->utime = input->utime;
 			proc_state->stime = input->stime;
-			proc_state->rss_kb = input->rssKb;
+
 			proc_state->threads = input->threads;
 
 			strncpy(proc_state->comm,input->comm,sizeof(proc_state->comm));
@@ -883,11 +898,8 @@ void process_stats_update(process_state_input_t* input)
 			proc_state->number_of_records++;
 
 
-			//calculate sum for avg rss usage
-			proc_state->rss_sum += proc_state->rss_kb;
-
-			//calculate rss variation
-			proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
+			//calculate rss data
+			calculate_rss_data(input, proc_state);
 
             //calculate io data
 			calculate_io_data(input, proc_state);

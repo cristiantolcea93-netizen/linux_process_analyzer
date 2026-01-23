@@ -174,9 +174,11 @@ static int read_rss_status(pid_t pid, long *rss_kb)
     {
         if (strncmp(line, "VmRSS:", 6) == 0)
         {
-            sscanf(line + 6, "%ld", rss_kb);
-            fclose(f);
-            return 0;
+            if(sscanf(line + 6, "%ld", rss_kb)==1)
+            {
+            	fclose(f);
+            	return 0;
+            }
         }
     }
 
@@ -268,14 +270,34 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 	ret = read_rss_status(pid, &proc_data->rssKb);
 
 	if(ret != 0)
-		return -1;
+	{
+		//failed to get rss
+		proc_data->rssKb = -1;
+		proc_data->bo_is_rss_valid = false;
+	}
+	else
+	{
+		//rss available
+		proc_data->bo_is_rss_valid = true;
+	}
 
 
 
 	ret = read_proc_io(pid, proc_data);
 
+
 	if(ret != 0)
-		return -1;
+	{
+		//failed to get io data
+		proc_data->read_kbytes  = -1;
+		proc_data->write_kbytes = -1;
+		proc_data->bo_is_io_valid = false;
+	}
+	else
+	{
+		//io data available
+		proc_data->bo_is_io_valid = true;
+	}
 
 
 	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld ",
@@ -421,7 +443,7 @@ process_snapshot_status collect_snapshot(void)
 {
 	DIR *dir = opendir(PROC_PATH);
 	if (!dir) {
-		perror("opendir /proc");
+		fprintf(stderr,"failed to open /proc");
 		return process_snapshot_error;
 	}
 	process_state_input_t process_data;
@@ -455,7 +477,6 @@ process_snapshot_status collect_snapshot(void)
 			//generate json file
 			write_output_to_json(&process_data);
 		}
-
 	}
 
 	closedir(dir);

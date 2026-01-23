@@ -215,10 +215,34 @@ code/
 ---
 
 ## Limitations & Notes
-- Requires Linux with /proc filesystem
-- Disk I/O statistics depend on kernel support for /proc/[pid]/io
+
+- Requires Linux with a mounted `/proc` filesystem
+- Disk I/O statistics depend on kernel support for `/proc/[pid]/io`
 - Short-lived processes may appear with fewer samples
 - Tested on modern Linux distributions using systemd
+
+### Missing RSS and I/O data
+
+RSS and I/O values are reported as `-1` in `.log` and `.jsonl` snapshot files when the information is not available.
+
+This typically occurs in one of the following scenarios:
+
+1. **Kernel threads** (e.g. `kworker/*`) do not expose RSS or I/O information via `/proc`
+2. The process terminates while a snapshot is being collected
+
+### Impact on aggregated metrics
+
+Invalid RSS or I/O samples are **excluded from aggregated metrics calculation** (`metrics.json` and console output).
+
+If a process has one or more invalid data fields, **only the metrics that depend on those specific fields are skipped**.
+
+For example:
+- If a process has invalid RSS data, the following metrics are skipped:
+  - `rss_usage`
+  - `rss_increase`
+  - `rss_delta`
+- Other metrics (e.g. CPU usage or disk I/O, if valid) are still calculated for the same process.
+
 
 ---
 

@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
+
 typedef struct{
 	bool cpu_average_requested;
 	int cpu_average_pids_to_display;
@@ -46,6 +47,8 @@ typedef struct
 	int threads;
 	unsigned long long read_kbytes;
 	unsigned long long write_kbytes;
+	bool bo_is_rss_valid;
+	bool bo_is_io_valid;
 }process_state_input_t;
 
 extern void process_stats_initialize(const char* prog);

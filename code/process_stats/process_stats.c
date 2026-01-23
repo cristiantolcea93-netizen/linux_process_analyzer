@@ -46,6 +46,8 @@ typedef struct{
 	long rss_average_kb;
 	long rss_sum;
 	long rss_variation_since_startup;
+	bool bo_is_rss_initialized;
+	unsigned long num_of_rss_records;
 
 	/* calculated IO data*/
 	unsigned long long prev_read_kbytes;
@@ -54,6 +56,7 @@ typedef struct{
 	double avg_read_rate_kb_s;
 	double avg_write_rate_kb_s;
 	double io_time_acc;
+	bool bo_is_io_initialized;
 
 	/* housekeeping */
 	bool seen_in_snapshot;
@@ -283,29 +286,36 @@ static void calculate_io_data(process_state_input_t* input,process_state_t* proc
 {
 	if(true == input->bo_is_io_valid)
 	{
-		if (proc_state->number_of_records > 0)
+		if (false == proc_state->bo_is_io_initialized)
 		{
-			double dt = input->timestamp - proc_state->prev_timestamp;
-
-			if (dt > 0.0)
-			{
-				uint64_t read_delta  = 0;
-				uint64_t write_delta = 0;
-
-				if (input->read_kbytes >= proc_state->prev_read_kbytes)
-					read_delta = input->read_kbytes - proc_state->prev_read_kbytes;
-
-				if (input->write_kbytes >= proc_state->prev_write_kbytes)
-					write_delta = input->write_kbytes - proc_state->prev_write_kbytes;
-
-				proc_state->total_read_kbytes  += read_delta;
-				proc_state->total_write_kbytes += write_delta;
-				proc_state->io_time_acc        += dt;
-			}
+			proc_state->prev_read_kbytes  = input->read_kbytes;
+			proc_state->prev_write_kbytes = input->write_kbytes;
+			proc_state->bo_is_io_initialized = true;
+			return;
 		}
+
+		double dt = input->timestamp - proc_state->prev_timestamp;
+
+		if(dt <= 0.0)
+			return;
+
+
+		uint64_t read_delta  = 0;
+		uint64_t write_delta = 0;
+
+		if (input->read_kbytes >= proc_state->prev_read_kbytes)
+			read_delta = input->read_kbytes - proc_state->prev_read_kbytes;
+
+		if (input->write_kbytes >= proc_state->prev_write_kbytes)
+			write_delta = input->write_kbytes - proc_state->prev_write_kbytes;
+
+		proc_state->total_read_kbytes  += read_delta;
+		proc_state->total_write_kbytes += write_delta;
+		proc_state->io_time_acc        += dt;
+
+
 		proc_state->prev_read_kbytes  = input->read_kbytes;
 		proc_state->prev_write_kbytes = input->write_kbytes;
-		proc_state->prev_timestamp    = input->timestamp;
 	}
 
 }
@@ -314,9 +324,10 @@ static void calculate_rss_data(process_state_input_t* input, process_state_t* pr
 {
 	if(true == input->bo_is_rss_valid)
 	{
-		if(proc_state->number_of_records == 0)
+		if(false == proc_state->bo_is_rss_initialized)
 		{
 			proc_state->rss_initial_kb = input->rssKb;
+			proc_state->bo_is_rss_initialized = true;
 		}
 		proc_state->prev_rss_kb = input->rssKb;
 		proc_state->rss_kb = input->rssKb;
@@ -325,6 +336,7 @@ static void calculate_rss_data(process_state_input_t* input, process_state_t* pr
 
 		//calculate rss variation
 		proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
+		proc_state->num_of_rss_records++;
 	}
 }
 
@@ -649,20 +661,20 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 		{
 			arr[i++] = ps;
 
-			if(true == args->cpu_average_requested)
+			if((true == args->cpu_average_requested) && (ps->cpu_usage_samples))
 			{
 				ps->average_cpu_usage = ps->cpu_usage_sum / ps->cpu_usage_samples;
 			}
-			if(true == args->rss_average_requested)
+			if((true == args->rss_average_requested) && (ps->num_of_rss_records))
 			{
-				ps->rss_average_kb  = ps->rss_sum / ps->number_of_records;
+				ps->rss_average_kb  = ps->rss_sum / ps->num_of_rss_records;
 			}
 
-			if(true == args->read_rate_requested)
+			if((true == args->read_rate_requested) && (ps->io_time_acc))
 			{
 				ps->avg_read_rate_kb_s = ps->total_read_kbytes/ps->io_time_acc;
 			}
-			if(true == args->write_rate_requested)
+			if(true == args->write_rate_requested && (ps->io_time_acc))
 			{
 				ps->avg_write_rate_kb_s = ps->total_write_kbytes/ps->io_time_acc;
 			}
@@ -846,6 +858,13 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 
 }
 
+/*
+ * Snapshot policy:
+ * - CPU data is mandatory (stat read failure discards snapshot)
+ * - RSS and IO are optional
+ * - Optional metrics are initialized on first valid sample
+ * - Invalid optional data is stored as -1 in .log and .jsonl files but excluded from aggregation
+ */
 
 
 void process_stats_update(process_state_input_t* input)

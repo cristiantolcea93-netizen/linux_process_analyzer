@@ -11,6 +11,7 @@ add_executable(${PROJECT_NAME}
     process_snapshot/process_snapshot.c
     args_parser/args_parser.c
     process_stats/process_stats.c
+    config/config.c
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)

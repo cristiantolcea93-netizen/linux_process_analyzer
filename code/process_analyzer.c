@@ -9,6 +9,7 @@
 #include "process_snapshot.h"
 #include "args_parser.h"
 #include "process_stats.h"
+#include "config.h"
 
 
 static int getTimeFd(uint64_t interval_ms);
@@ -79,69 +80,82 @@ static void run_snapshot_once()
 
 int main(int argc, char **argv)
 {
-	parse_args_status l_parse_status  = ap_parse_args(argc, argv, &gArguments);
+	config_status l_cfg_status = config_init();
 
-	if(parse_args_ok == l_parse_status)
+	if(config_success == l_cfg_status)
 	{
-		if(true == gArguments.delete_old_files)
-		{
-			/*delete the old files if the argument was given*/
-			if(process_snapshot_success != process_snapshot_delete_old_files())
-			{
-				/*failed to delete old files, do not start the analyzer*/
-				return -1;
-			}
-		}
-		int tfd = getTimeFd(gArguments.interval_ms);
-		if(tfd != -1)
-		{
-			register_signal_handler();
-			int noOfIterations = 0;
-			while(noOfIterations < gArguments.count)
-			{
-				uint64_t expirations;
+		parse_args_status l_parse_status  = ap_parse_args(argc, argv, &gArguments);
 
-				if(g_stop_requested)
+		if(parse_args_ok == l_parse_status)
+		{
+			// print the configuration banner
+			config_print_banner();
+			if(true == gArguments.delete_old_files)
+			{
+				/*delete the old files if the argument was given*/
+				if(process_snapshot_success != process_snapshot_delete_old_files())
 				{
-					//program interrupted
-					printf("\nProgram interrupted by user (CTRL+C) or terminated\n");
-					break;
+					/*failed to delete old files, do not start the analyzer*/
+					return -1;
 				}
-
-				if (read(tfd, &expirations, sizeof(expirations)) != sizeof(expirations))
+			}
+			int tfd = getTimeFd(gArguments.interval_ms);
+			if(tfd != -1)
+			{
+				register_signal_handler();
+				int noOfIterations = 0;
+				while(noOfIterations < gArguments.count)
 				{
-					if (errno == EINTR && g_stop_requested)
+					uint64_t expirations;
+
+					if(g_stop_requested)
 					{
 						//program interrupted
 						printf("\nProgram interrupted by user (CTRL+C) or terminated\n");
 						break;
 					}
 
-					fprintf(stderr, "failed to read expirations!");
-					break;
-				}
+					if (read(tfd, &expirations, sizeof(expirations)) != sizeof(expirations))
+					{
+						if (errno == EINTR && g_stop_requested)
+						{
+							//program interrupted
+							printf("\nProgram interrupted by user (CTRL+C) or terminated\n");
+							break;
+						}
 
-				while(expirations-- && noOfIterations < gArguments.count)
-				{
-					//recover number of iterations in case of expirations caused by high CPU load
-					run_snapshot_once();
+						fprintf(stderr, "failed to read expirations!");
+						break;
+					}
+
+					while(expirations-- && noOfIterations < gArguments.count)
+					{
+						//recover number of iterations in case of expirations caused by high CPU load
+						run_snapshot_once();
+					}
+					noOfIterations++;
 				}
-				noOfIterations++;
+				//print end of execution metrics
+				process_stats_print_metrics(&(gArguments.end_metrics_args),gArguments.interval_ms);
 			}
-			//print end of execution metrics
-			process_stats_print_metrics(&(gArguments.end_metrics_args),gArguments.interval_ms);
+			else
+			{
+				//failed to start the timer
+				return -1;
+			}
+
 		}
 		else
 		{
-			//failed to start the timer
+			//failed to parse arguments
 			return -1;
 		}
-
 	}
 	else
 	{
-		//failed to parse arguments
+		//failed to parse the configuration
 		return -1;
 	}
+
 	return 0;
 }

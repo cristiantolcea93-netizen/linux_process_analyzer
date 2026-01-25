@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <sys/file.h>
 #include <fcntl.h>
+#include <limits.h>
 
 #include "process_snapshot.h"
 #include "process_stats.h"
@@ -77,13 +78,14 @@ static void rotate_logs(char* filePath)
 {
     char old_path[256], new_path[256];
 
+    int max_rotations = config_get_max_number_of_files();
     // remove the oldest log entry
     snprintf(old_path, sizeof(old_path),
-             "%s.%d", filePath, CONFIG_MAX_ROTATIONS);
+             "%s.%d", filePath, max_rotations);
     unlink(old_path);
 
     // rename .N-1 -> .N
-    for (int i = CONFIG_MAX_ROTATIONS - 1; i >= 1; i--) {
+    for (int i = max_rotations - 1; i >= 1; i--) {
         snprintf(old_path, sizeof(old_path),
                  "%s.%d", filePath, i);
         snprintf(new_path, sizeof(new_path),
@@ -103,13 +105,17 @@ static void rotate_logs(char* filePath)
 static void log_data(FILE* file, const char* fmt, ...)
 {
 	va_list args;
-	// todo add config file to print to stdout
-#if 0
-	/* Print to stdout */
-	va_start(args, fmt);
-	vprintf(fmt, args);
-	va_end(args);
-#endif
+
+	bool is_console_snapshot_enabled = config_get_raw_console_enabled();
+
+	if(true == is_console_snapshot_enabled)
+	{
+		/* Print to stdout */
+		va_start(args, fmt);
+		vprintf(fmt, args);
+		va_end(args);
+	}
+
 	/* Print to file if provided */
 	if (file) {
 		va_start(args, fmt);
@@ -339,7 +345,7 @@ static void write_output_to_json(process_state_input_t* input)
 	}
 	else
 	{
-		fprintf(stderr,"write_output_to_json: failed to open json file");
+		//jsonl file not required by configuration
 	}
 }
 
@@ -365,36 +371,11 @@ static int read_proc_threads(pid_t pid)
     return threads;
 }
 
-process_snapshot_status make_log_dir(void)
-{
-	process_snapshot_status l_retVal;
-
-	if (mkdir(CONFIG_LOG_DIR, 0755) < 0)
-	{
-		if (errno == EEXIST)
-		{
-			l_retVal = process_snapshot_success;
-		}
-		else
-		{
-			printf("make_log_dir: failed to create directory for the output files\n");
-			l_retVal = process_snapshot_error;
-		}
-	}
-	else
-	{
-		l_retVal = process_snapshot_success;
-	}
-
-	return l_retVal;
-
-}
-
 process_snapshot_status process_snapshot_delete_old_files(void)
 {
 	struct dirent *ent;
 
-	DIR *dir = opendir(CONFIG_LOG_DIR);
+	DIR *dir = opendir(config_get_output_dir());
 	if (dir != NULL)
 	{
 		/* scan the directory */
@@ -405,7 +386,7 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 			{
 				/*remove only the files created by the tool*/
 				char deletefilePath[512];
-				snprintf(deletefilePath, sizeof(deletefilePath), "%s/%s", CONFIG_LOG_DIR, ent->d_name);
+				snprintf(deletefilePath, sizeof(deletefilePath), "%s/%s", config_get_output_dir(), ent->d_name);
 
 				if(0 == remove(deletefilePath))
 				{
@@ -431,7 +412,7 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 		else
 		{
 			/* could not open directory */
-			fprintf(stderr, "process_snapshot_delete_old_files: Failed to open dir %s\n", CONFIG_LOG_DIR);
+			fprintf(stderr, "process_snapshot_delete_old_files: Failed to open dir %s\n", config_get_output_dir());
 			return process_snapshot_error;
 		}
 
@@ -488,22 +469,31 @@ process_snapshot_status collect_snapshot(void)
 process_snapshot_status process_snapshot_initialize(void)
 {
 	process_snapshot_status retVal;
-	char openfilePath[256];
-	snprintf(openfilePath, sizeof(openfilePath), "%s/%s", CONFIG_LOG_DIR, CONFIG_LOG_FILE);
+	char openfilePath[PATH_MAX];
 
-	retVal = make_log_dir();
+	bool isRawLogEnabled = config_get_raw_log_enabled();
+	bool isJsonlEnabled = config_get_raw_jsonl_enabled();
 
+	if((false == isRawLogEnabled) && (false == isJsonlEnabled))
+	{
+		//no files required by configuration
+		return process_snapshot_success;
+	}
+
+	snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
+
+
+
+	retVal = acquire_lock();
 	if(process_snapshot_success == retVal)
 	{
-		retVal = acquire_lock();
-		if(process_snapshot_success == retVal)
+		if(true == isRawLogEnabled)
 		{
 			off_t size = get_file_size(openfilePath);
-			if (size >= CONFIG_MAX_LOG_SIZE)
+			if (size >= config_get_max_file_size_bytes())
 			{
 				rotate_logs(openfilePath);
 			}
-
 			PSN_pfOutputFile = fopen(openfilePath, "a");
 
 			if(!PSN_pfOutputFile)
@@ -515,13 +505,20 @@ process_snapshot_status process_snapshot_initialize(void)
 			{
 				retVal = process_snapshot_success;
 			}
+		}
+		else
+		{
+			//.log file disabled from the configuration
+		}
 
+		if(true == isJsonlEnabled)
+		{
 			//jsonl file handling
 			memset(openfilePath, 0x00, sizeof(openfilePath));
-			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", CONFIG_LOG_DIR, CONFIG_JSON_FILE);
-			size = get_file_size(openfilePath);
+			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_JSON_FILE);
+			off_t size = get_file_size(openfilePath);
 
-			if (size >= CONFIG_MAX_LOG_SIZE)
+			if (size >= config_get_max_file_size_bytes())
 			{
 				rotate_logs(openfilePath);
 			}
@@ -536,17 +533,17 @@ process_snapshot_status process_snapshot_initialize(void)
 			{
 				retVal = process_snapshot_success;
 			}
-
 		}
 		else
 		{
-			//error logged by acquire_lock
+			//.jsonl raw data not required by configuration
 		}
 	}
 	else
 	{
-		//error logged in make_log_dir
+		//error logged by acquire_lock
 	}
+
 
 	return retVal;
 }

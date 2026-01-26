@@ -16,7 +16,7 @@
 #define CONFIG_METRICS_JSON "metrics.json"
 
 
-#define CONFIG_LOCK_FILE "/tmp/ptime/ptime.lock"
+#define CONFIG_LOCK_FILE "ptime.lock"
 
 
 typedef enum

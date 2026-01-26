@@ -37,11 +37,13 @@ static void rotate_logs(char* filePath);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static int read_rss_status(pid_t pid, long *rss_kb);
 static void write_output_to_json(process_state_input_t* input);
+static process_snapshot_status acquire_lock(const char* lock_file_path);
 
 
-static process_snapshot_status acquire_lock(void)
+static process_snapshot_status acquire_lock(const char* lock_file_path)
 {
-	g_lock_fd = open(CONFIG_LOCK_FILE, O_CREAT | O_RDWR, 0644);
+
+	g_lock_fd = open(lock_file_path, O_CREAT | O_RDWR, 0644);
 	if (g_lock_fd < 0)
 	{
 		printf("acquire_lock: failed to open lock file\n");
@@ -480,15 +482,15 @@ process_snapshot_status process_snapshot_initialize(void)
 		return process_snapshot_success;
 	}
 
-	snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
+	snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOCK_FILE);
+	retVal = acquire_lock((const char*)openfilePath);
 
-
-
-	retVal = acquire_lock();
 	if(process_snapshot_success == retVal)
 	{
 		if(true == isRawLogEnabled)
 		{
+			memset(openfilePath, 0x00, sizeof(openfilePath));
+			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
 			off_t size = get_file_size(openfilePath);
 			if (size >= config_get_max_file_size_bytes())
 			{

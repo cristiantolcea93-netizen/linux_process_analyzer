@@ -445,8 +445,12 @@ process_snapshot_status collect_snapshot(void)
 
 		process_data.pid = atoi(de->d_name);
 
-		if(process_data.pid == getpid())
-			continue;
+		if(false == config_get_include_self())
+		{
+			//PID of the test program is included only if specified in the configuration
+			if(process_data.pid == getpid())
+				continue;
+		}
 
 		if (read_proc_stat(process_data.pid,&process_data) == 0) {
 			process_data.threads = read_proc_threads(process_data.pid);

@@ -21,6 +21,8 @@ typedef struct
     off_t max_file_size_bytes;
     int max_number_of_files;
 
+    bool include_self;
+
 }config_t;
 
 
@@ -42,7 +44,10 @@ static const config_t config_default =
 
     /* rotation */
     .max_file_size_bytes = 5 * 1024 * 1024, /* 5MB */
-    .max_number_of_files = 3
+    .max_number_of_files = 3,
+
+	/*additional options*/
+	.include_self = false
 };
 
 
@@ -204,19 +209,18 @@ static int config_set_option(const char* key,const char* value)
         return parse_bool(value, &configuration_t.metrics_json_enabled);
 
     if (!strcmp(key, "max_file_size"))
-        return parse_size(value,
-                          &configuration_t.max_file_size_bytes);
+        return parse_size(value,&configuration_t.max_file_size_bytes);
 
     if (!strcmp(key, "max_number_of_files"))
     {
         int n = atoi(value);
-
-        if (n <= 0 || n > 100)
-            return -1;
-
         configuration_t.max_number_of_files = n;
         return 0;
     }
+
+    if(!strcmp(key, "include_self"))
+    	return  parse_bool(value, &configuration_t.include_self);
+
 
     return -1; /* unknown key */
 }
@@ -337,9 +341,9 @@ static config_status validate_config(void)
         return config_error_validation;
     }
 
-    if (configuration_t.max_number_of_files < 1)
+    if (configuration_t.max_number_of_files < 1 || configuration_t.max_number_of_files >= 1000)
     {
-        fprintf(stderr,"Config error: invalid max_number_of_files\n");
+        fprintf(stderr,"Config error: invalid max_number_of_files expected a value between 1 and 1000, config value: %d\n", configuration_t.max_number_of_files);
         return config_error_validation;
     }
 
@@ -381,6 +385,10 @@ void config_print_banner(void)
     printf("\n");
 
     printf("   max files             : %d\n",configuration_t.max_number_of_files);
+    printf("\n");
+
+    printf(" General options\n");
+    printf("   include_self          : %s\n",truefalse(configuration_t.include_self));
 
     printf("=================================================\n\n");
 }
@@ -445,4 +453,9 @@ bool config_get_metrics_console_enabled(void)
 bool config_get_metrics_json_enabled(void)
 {
 	return configuration_t.metrics_console_enabled;
+}
+
+bool config_get_include_self(void)
+{
+	return configuration_t.include_self;
 }

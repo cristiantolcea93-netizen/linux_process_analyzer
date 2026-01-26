@@ -37,5 +37,6 @@ extern bool config_get_raw_log_enabled(void);
 extern bool config_get_raw_jsonl_enabled(void);
 extern bool config_get_metrics_console_enabled(void);
 extern bool config_get_metrics_json_enabled(void);
+extern bool config_get_include_self(void);
 
 #endif /* CONFIG_CONFIG_H_ */

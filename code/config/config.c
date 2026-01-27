@@ -4,8 +4,13 @@
 #include <ctype.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <errno.h>
 #include "config.h"
 #include "unistd.h"
+
+#define CONFIG_MIN_FILE_SIZE_BYTES 1024
+#define CONFIG_MIN_NO_OF_FILES 1
+#define CONFIG_MAX_NO_OF_FILES 1000
 
 typedef struct
 {
@@ -81,6 +86,21 @@ static char* trim(char* s)
 
 static config_status parse_config_file(const char* path)
 {
+	struct stat st;
+
+	if (stat(path, &st) != 0)
+	{
+	    fprintf(stderr,"Config error: cannot access config file %s: %s\n",path, strerror(errno));
+	    return config_error_io;
+	}
+
+	if (!S_ISREG(st.st_mode))
+	{
+	    fprintf(stderr,"Config error: %s is not a regular file\n",path);
+	    return config_error_io;
+	}
+
+
     FILE* f = fopen(path, "r");
     if (!f)
     {
@@ -335,15 +355,15 @@ static config_status validate_config(void)
     }
 
 
-    if (configuration_t.max_file_size_bytes < 1024)
+    if (configuration_t.max_file_size_bytes < CONFIG_MIN_FILE_SIZE_BYTES)
     {
-        fprintf(stderr,"Config error: max_file_size too small\n");
+        fprintf(stderr,"Config error: max_file_size too small,minimum size: %d, config value %jd\n", CONFIG_MIN_FILE_SIZE_BYTES, configuration_t.max_file_size_bytes);
         return config_error_validation;
     }
 
-    if (configuration_t.max_number_of_files < 1 || configuration_t.max_number_of_files >= 1000)
+    if (configuration_t.max_number_of_files < CONFIG_MIN_NO_OF_FILES || configuration_t.max_number_of_files >= CONFIG_MAX_NO_OF_FILES)
     {
-        fprintf(stderr,"Config error: invalid max_number_of_files expected a value between 1 and 1000, config value: %d\n", configuration_t.max_number_of_files);
+        fprintf(stderr,"Config error: invalid max_number_of_files expected a value between %d and %d, config value: %d\n",CONFIG_MIN_NO_OF_FILES, CONFIG_MAX_NO_OF_FILES, configuration_t.max_number_of_files);
         return config_error_validation;
     }
 

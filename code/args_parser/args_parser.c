@@ -256,7 +256,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 
 	if((false == boCountProvided) || (false == boIntervalProvided))
 	{
-		fprintf(stderr, "Missing mandatory parameter. interval provided %d, count provided %d \n", boIntervalProvided, boCountProvided);
+		fprintf(stderr, "Missing mandatory parameter. Interval provided %d, count provided %d. Use -i and -n arguments \n", boIntervalProvided, boCountProvided);
 		print_usage(argv[0]);
 		return parse_args_error;
 	}

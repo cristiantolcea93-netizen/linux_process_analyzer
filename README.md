@@ -14,7 +14,7 @@ The tool is designed for **low-overhead monitoring**, accurate **time-based calc
   - Average RSS
   - RSS increase since startup
   - RSS delta
-- Disk I/O s per process:
+- Disk I/O metrics per process:
   - Total bytes read / written
   - Average disk read/write rate (KB/s)
 - Snapshot logging with log rotation
@@ -36,16 +36,18 @@ The tool is designed for **low-overhead monitoring**, accurate **time-based calc
 - Not a system-wide resource accounting tool
 - Not intended for per-thread profiling
 
+---
 
 ## How It Works
 
 At each sampling interval, the tool:
+
 - Reads process data from `/proc/[pid]/stat`, `/proc/[pid]/status`, and `/proc/[pid]/io`
 - Stores a snapshot of all running processes (in text and jsonl format)
 - Accumulates statistics over time using **monotonic timestamps**
 - Designed to minimize per-sample overhead even at small intervals (tens of milliseconds)
 
-At the end of execution (or when interrupted), the requested s are calculated and displayed on the console + a metrics.json file is generated.
+At the end of execution (or when interrupted), the requested metrics are calculated and displayed on the console and in a `metrics.json` file.
 
 ---
 
@@ -59,6 +61,67 @@ This guarantees stable measurements even if the system clock changes.
 
 ---
 
+## Configuration File
+
+The tool supports an external configuration file that controls output behavior and log rotation.
+
+### Configuration File Location
+
+The configuration file path is provided via an environment variable:
+
+```bash
+export PROCESS_ANALYZER_CONFIG=/path/to/configuration.config
+```
+
+If the variable is not set, default values are used.
+
+If a configuration file is present but invalid, the program exits with an error.
+
+---
+
+### Example Configuration File
+
+```ini
+# Output directory (default: /tmp/ptime)
+output_dir=/home/user/ptime
+
+# Raw snapshot output
+raw_log_enabled=true
+raw_jsonl_enabled=true
+raw_console_enabled=false
+
+# Metrics output
+metrics_on_console=true
+metrics_on_json=true
+
+# Log rotation
+max_file_size=5m
+max_number_of_files=3
+
+# General options
+include_self=false
+```
+
+---
+
+### Configuration Options
+
+| Option              | Type    | Default      | Description |
+|---------------------|---------|--------------|-------------|
+| `output_dir`        | string  | `/tmp/ptime` | Directory for all output files |
+| `raw_log_enabled`   | bool    | `true`       | Enable `.log` snapshot files |
+| `raw_jsonl_enabled` | bool    | `true`       | Enable `.jsonl` snapshot files |
+| `raw_console_enabled` | bool | `false`      | Print raw snapshots to console |
+| `metrics_on_console`| bool    | `true`       | Print aggregated metrics |
+| `metrics_on_json`   | bool    | `true`       | Generate `metrics.json` |
+| `max_file_size`     | size    | `5m`         | Max size per rotated file |
+| `max_number_of_files` | int  | `3`          | Number of rotated files |
+| `include_self`      | bool    | `false`      | Include process_analyzer in analysis |
+
+Supported size suffixes: `k`, `m`, `g`.
+
+---
+
 ## Usage
 
 ```bash
@@ -67,12 +130,10 @@ This guarantees stable measurements even if the system clock changes.
 
 ### Mandatory options
 
-The following options are **required** for the tool to run and collect snapshots:
+The following options are **required**:
 
 - `-i`, `--interval <dur>` — sampling interval  
 - `-n`, `--count <N>` — number of snapshots (`infinity` is allowed)
-
-If either of these is missing, argument validation will fail.
 
 ---
 
@@ -80,22 +141,21 @@ If either of these is missing, argument validation will fail.
 
 ```
 -i, --interval <dur>        Interval (e.g. 500ms, 1s, 2m)
--n, --count <N>             Number of snapshots.
-                            Use "infinity" to collect snapshots until interrupted
+-n, --count <N>             Number of snapshots
 
--c, --cpu_usage <N>         Display top N processes by average CPU usage
--r, --rss_usage <N>         Display top N processes by average RSS usage
--s, --rss_increase <N>      Display top N processes by RSS increase since startup
--d, --rss_delta <N>         Display top N processes by RSS delta
+-c, --cpu_usage <N>         Top N by average CPU usage
+-r, --rss_usage <N>         Top N by average RSS usage
+-s, --rss_increase <N>      Top N by RSS increase
+-d, --rss_delta <N>         Top N by RSS delta
 
--e, --bytes_read <N>        Display top N processes by total disk read (KB)
--f, --bytes_write <N>       Display top N processes by total disk write (KB)
--g, --read_rate <N>         Display top N processes by disk read rate (KB/s)
--a, --write_rate <N>        Display top N processes by disk write rate (KB/s)
+-e, --bytes_read <N>        Top N by disk read (KB)
+-f, --bytes_write <N>       Top N by disk write (KB)
+-g, --read_rate <N>         Top N by read rate (KB/s)
+-a, --write_rate <N>        Top N by write rate (KB/s)
 
--j, --delete_old_files      Delete log files from previous executions
--v, --version               Display tool version and exit
--h, --help                  Show help message
+-j, --delete_old_files      Delete old log files
+-v, --version               Show version
+-h, --help                  Show help
 ```
 
 ---
@@ -112,17 +172,7 @@ If either of these is missing, argument validation will fail.
     -j
 ```
 
-Stop the program using `CTRL+C`.  
-The tool will print the aggregated statistics and generate a json file (metrics.json) before exiting. For now, the metrics.json file is generated at the end of the execution as long as any metric is requested via at least one of the following CLI parameters:
-
-- `--cpu_usage`
-- `--rss_usage`
-- `--rss_increase`
-- `--rss_delta`
-- `--bytes_read`
-- `--bytes_write`
-- `--read_rate`
-- `--write_rate`
+Stop the program using `CTRL+C`.
 
 ---
 
@@ -130,9 +180,8 @@ The tool will print the aggregated statistics and generate a json file (metrics.
 
 Each sampling iteration is logged as a snapshot.
 
-Example snapshot entries:
+### Text format
 
-1) Text format
 ```
 [2026-01-11 19:19:49.611] SNAPSHOT START #################
 PID=1548 COMM=systemd STATE=S PPID=1 UTIME=71 STIME=21 RSS(KB)=12592 IOR(KB)=0 IOW(KB)=0 THREADS=1
@@ -140,7 +189,9 @@ PID=1558 COMM=pipewire STATE=S PPID=1548 UTIME=2514 STIME=2346 RSS(KB)=16776 IOR
 ...
 SNAPSHOT END #################
 ```
-2) jsonl format
+
+### JSONL format
+
 ```
 {"timestamp":"2026-01-19 21:47:41.677","pid":2603,"comm":"eclipse","state":"S","ppid":1800,"utime":7,"stime":1,"rss_kb":23376,"io_read_kb":640,"io_write_kb":0,"threads":5}
 {"timestamp":"2026-01-19 21:47:41.677","pid":2618,"comm":"java","state":"S","ppid":2603,"utime":19907,"stime":1161,"rss_kb":1129624,"io_read_kb":212404,"io_write_kb":16744,"threads":70}
@@ -151,24 +202,49 @@ SNAPSHOT END #################
 
 ## Log Storage & Rotation
 
-- Snapshots (text + jsonl)
-- s.json file generated at the end are stored in:
+All output files are stored in `output_dir`.
+
+By default:
 
 ```
 /tmp/ptime/
 ```
 
-Log rotation is enabled for both text and jsonl files:
-- Maximum of **4 log files** of each type
-- Maximum size per file: **5 MB**
+Rotation settings are configurable via the config file.
 
 ---
 
 ## JSON Output
 
-- `s.json` follows a versioned schema
-- Schema documentation is available in `SCHEMA.md`
-- Snapshot data is written in JSON Lines format (`.jsonl`)
+- `metrics.json` follows a versioned schema
+- Schema documentation: [SCHEMA.md](SCHEMA.md)
+- Snapshot data uses JSON Lines format (`.jsonl`)
+
+---
+
+## Performance & Benchmark
+
+Tests were performed on:
+
+- CPU: Intel Core i7 (8th generation, 8 cores)
+- Laptop: HP ProBook 450 G5
+- OS: Ubuntu Linux
+
+### Results
+
+| Sampling Interval | CPU Usage (process_analyzer) |
+|-------------------|------------------------------|
+| 15 ms             | ~12% (single core saturated) |
+| 30 ms             | ~7.5%                        |
+| 1 s               | ~0.17–0.2%                   |
+
+Notes:
+
+- The analyzer is single-threaded
+- At very small intervals (<20ms), one CPU core may reach near 100%
+- For long-running monitoring, intervals ≥100ms are recommended
+
+---
 
 ## Build Instructions
 
@@ -197,7 +273,8 @@ code/
 │   ├── args_parser.c
 │   └── args_parser.h
 ├── config/
-│   ├── config.h
+│   ├── config.c
+|   └── config.h
 ├── process_snapshot/
 │   ├── process_snapshot.c
 │   └── process_snapshot.h
@@ -209,51 +286,49 @@ code/
 │       └── uthash.h
 ├── CMakeLists.txt
 └── make.sh
-
 ```
 
 ---
 
 ## Limitations & Notes
 
-- Requires Linux with a mounted `/proc` filesystem
-- Disk I/O statistics depend on kernel support for `/proc/[pid]/io`
-- Short-lived processes may appear with fewer samples
-- Tested on modern Linux distributions using systemd
+- Requires Linux with `/proc`
+- Disk I/O depends on kernel support
+- Short-lived processes may have fewer samples
+- Tested on modern systemd-based distributions
 
 ### Missing RSS and I/O data
 
-RSS and I/O values are reported as `-1` in `.log` and `.jsonl` snapshot files when the information is not available.
+RSS and I/O values are reported as `-1` when unavailable.
 
-This typically occurs in one of the following scenarios:
+Common causes:
 
-1. **Kernel threads** (e.g. `kworker/*`) do not expose RSS or I/O information via `/proc`
-2. The process terminates while a snapshot is being collected
+1. Kernel threads (`kworker/*`)
+2. Process exits during sampling
 
 ### Impact on aggregated metrics
 
-Invalid RSS or I/O samples are **excluded from aggregated metrics calculation** (`metrics.json` and console output).
+Invalid samples are excluded from calculations.
 
-If a process has one or more invalid data fields, **only the metrics that depend on those specific fields are skipped**.
-
-For example:
-- If a process has invalid RSS data, the following metrics are skipped:
-  - `rss_usage`
-  - `rss_increase`
-  - `rss_delta`
-- Other metrics (e.g. CPU usage or disk I/O, if valid) are still calculated for the same process.
-
+Only dependent metrics are skipped.
 
 ---
 
-## Future improvements
-- configuration file support (log directory, rotation size, count)
-- python utilities for graph generation
+## Future Improvements
+
+- Extended configuration support
+- Plugin system
+- Built-in visualization
+- Python analysis tools
+
 ---
 
 ## Author
-Developed as learning and analysis tool for Linux Process monitoring.
 
+Developed as a learning and analysis tool for Linux process monitoring.
+
+---
 
 ## License
+
 MIT License

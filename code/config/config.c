@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
 #include "config.h"
 #include "unistd.h"
 
@@ -68,6 +69,7 @@ static const char* truefalse (bool v);
 static void print_size(size_t bytes);
 static int ensure_output_dir(const char* path);
 static int mkdir_p(const char *path, mode_t mode);
+static int check_lockfile_access(const char* dir);
 
 
 static char* trim(char* s)
@@ -335,7 +337,7 @@ static int ensure_output_dir(const char* path)
     }
 
     /* Now check write access */
-    if (access(path, W_OK) != 0)
+    if (check_lockfile_access(path) != 0)
     {
         fprintf(stderr,"Config error: no write permission for %s\n",path);
         return -1;
@@ -343,6 +345,25 @@ static int ensure_output_dir(const char* path)
 
     return 0;
 }
+
+static int check_lockfile_access(const char* dir)
+{
+    char path[PATH_MAX];
+
+    int ret = snprintf(path, sizeof(path), "%s/%s", dir, CONFIG_LOCK_FILE);
+    if ((ret >= (int)sizeof(path)) || (ret < 0))
+        return -1;
+
+    int fd = open(path,O_CREAT | O_RDWR,0644);
+
+    if (fd < 0)
+        return -1;
+
+    close(fd);
+    unlink(path);
+    return 0;
+}
+
 
 
 static config_status validate_config(void)

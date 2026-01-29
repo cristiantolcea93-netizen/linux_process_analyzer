@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include "args_parser.h"
 #include "process_stats.h"
+#include "config.h"
 
 #define MAX_NUMBER_OF_SNAPSHOTS 0x7FFFFFFF
 
@@ -255,7 +256,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 
 	if((false == boCountProvided) || (false == boIntervalProvided))
 	{
-		fprintf(stderr, "Missing mandatory parameter. interval provided %d, count provided %d \n", boIntervalProvided, boCountProvided);
+		fprintf(stderr, "Missing mandatory parameter. Interval provided %d, count provided %d. Use -i and -n arguments \n", boIntervalProvided, boCountProvided);
 		print_usage(argv[0]);
 		return parse_args_error;
 	}
@@ -269,8 +270,12 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 	   (true == cfg->end_metrics_args.read_rate_requested)   ||
 	   (true == cfg->end_metrics_args.write_rate_requested))
 	{
-		// initialize process stats only if at least one metric was requested
-		process_stats_initialize(argv[0]);
+		// initialize process stats only if at least one metric was requested AND at least one output method was enabled in the configuration
+
+		if(true == config_get_metrics_console_enabled() || (true == config_get_metrics_json_enabled()))
+		{
+			process_stats_initialize(argv[0]);
+		}
 	}
 
 	return parse_args_ok;

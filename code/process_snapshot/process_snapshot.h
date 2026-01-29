@@ -7,7 +7,6 @@ typedef enum
 	process_snapshot_success=0
 }process_snapshot_status;
 
-extern process_snapshot_status make_log_dir(void);
 extern process_snapshot_status collect_snapshot(void);
 extern process_snapshot_status process_snapshot_initialize(void);
 extern process_snapshot_status process_snapshot_delete_old_files(void);

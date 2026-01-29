@@ -342,19 +342,20 @@ static void calculate_rss_data(process_state_input_t* input, process_state_t* pr
 
 static void open_metrics_file(void)
 {
-	int path_length = snprintf(NULL, 0, "%s/%s", CONFIG_LOG_DIR, CONFIG_METRICS_JSON) + 1;
-	char* openfilePath = malloc(path_length);
+	if(true == config_get_metrics_json_enabled())
+	{
+		int path_length = snprintf(NULL, 0, "%s/%s", config_get_output_dir(), CONFIG_METRICS_JSON) + 1;
+		char* openfilePath = malloc(path_length);
 
-	if(openfilePath == NULL)
-	{
-		fprintf(stderr,"process_stats_initialize: failed to allocate memory for openfilePath!\n");
-	}
-	else
-	{
-		snprintf(openfilePath, path_length, "%s/%s", CONFIG_LOG_DIR, CONFIG_METRICS_JSON);
-		if(process_snapshot_success == make_log_dir())
+		if(openfilePath == NULL)
 		{
+			fprintf(stderr,"process_stats_initialize: failed to allocate memory for openfilePath!\n");
+		}
+		else
+		{
+			snprintf(openfilePath, path_length, "%s/%s", config_get_output_dir(), CONFIG_METRICS_JSON);
 			pfJsonOutput = fopen(openfilePath, "w");
+
 			if(pfJsonOutput != NULL)
 			{
 				//all good
@@ -363,12 +364,14 @@ static void open_metrics_file(void)
 			{
 				fprintf(stderr,"process_stats_initialize: failed to open %s\n", openfilePath);
 			}
+
+
+			free(openfilePath);
 		}
-		else
-		{
-			//failed to create directory
-		}
-		free(openfilePath);
+	}
+	else
+	{
+		//json output not enabled in the configuration
 	}
 }
 
@@ -685,20 +688,23 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			//calculate average only when requested
 
 			qsort(arr, count, sizeof(process_state_t*), cmp_average_cpu);
-
 			int n = args->cpu_average_pids_to_display < count ? args->cpu_average_pids_to_display : count;
-			printf("\nTop %d processes by average CPU usage:\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+			if(true == config_get_metrics_console_enabled())
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->average_cpu_usage,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by average CPU usage:\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->average_cpu_usage,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 
 			write_metric_block_json(&g_metrics[avg_cpu],arr,n);
@@ -709,18 +715,22 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			int n = args->rss_average_pids_to_display < count ? args->rss_average_pids_to_display : count;
 			//calculate average only when requested
 			qsort(arr, count, sizeof(process_state_t*), cmp_average_rss);
-			printf("\nTop %d processes by average RSS (KB):\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+			if(true == config_get_metrics_console_enabled())
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->rss_average_kb,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by average RSS (KB):\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->rss_average_kb,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 			write_metric_block_json(&g_metrics[avg_rss],arr,n);
 		}
@@ -729,18 +739,22 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 		{
 			int n = args->rss_increase_pids_to_display < count ? args->rss_increase_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), cmp_rss_variation);
-			printf("\nTop %d processes by RSS increase since startup (KB):\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+			if(true == config_get_metrics_console_enabled())
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->rss_variation_since_startup,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by RSS increase since startup (KB):\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->rss_variation_since_startup,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 			write_metric_block_json(&g_metrics[rss_incr],arr,n);
 		}
@@ -749,60 +763,70 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 		{
 			int n = args->rss_delta_pids_to_display < count ? args->rss_delta_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), cmp_rss_delta);
-			printf("\nTop %d processes by RSS delta since startup (KB):\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS delta (KB)", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+			if(true == config_get_metrics_console_enabled())
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->rss_variation_since_startup,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by RSS delta since startup (KB):\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS delta (KB)", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->rss_variation_since_startup,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 			write_metric_block_json(&g_metrics[rss_delta],arr,n);
-
 		}
 
 		if(true == args->bytes_read_requested)
 		{
 			int n = args->bytes_read_pids_to_display < count ? args->bytes_read_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_total_read_kbytes);
-			printf("\nTop %d processes by bytes read from disk (KB):\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+			if(true == config_get_metrics_console_enabled())
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->total_read_kbytes,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by bytes read from disk (KB):\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->total_read_kbytes,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 			write_metric_block_json(&g_metrics[bytes_read],arr,n);
-
 		}
 
 		if(true == args->bytes_write_requested)
 		{
 			int n = args->bytes_write_pids_to_display < count ? args->bytes_write_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_total_write_kbytes);
-			printf("\nTop %d processes by bytes written to disk (KB):\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+			if(true == config_get_metrics_console_enabled())
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->total_write_kbytes,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by bytes written to disk (KB):\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->total_write_kbytes,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 			write_metric_block_json(&g_metrics[written_bytes],arr,n);
 		}
@@ -811,18 +835,22 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 		{
 			int n = args->read_rate_pids_to_display < count ? args->read_rate_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_avg_read_rate);
-			printf("\nTop %d processes by disk read rate (KB/s):\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+			if(true == args->bytes_write_requested)
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->avg_read_rate_kb_s,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by disk read rate (KB/s):\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->avg_read_rate_kb_s,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 			write_metric_block_json(&g_metrics[read_rate],arr,n);
 		}
@@ -831,18 +859,23 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 		{
 			int n = args->write_rate_pids_to_display < count ? args->write_rate_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_avg_write_rate);
-			printf("\nTop %d processes by disk write rate (KB/s):\n", n);
-			printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");
-			for (i = 0; i < n; i++)
+
+
+			if(true == args->bytes_write_requested)
 			{
-				ps = arr[i];
-				printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
-						ps->pid,
-						ps->comm,
-						ps->state,
-						ps->avg_write_rate_kb_s,
-						ps->threads,
-						ps->number_of_records);
+				printf("\nTop %d processes by disk write rate (KB/s):\n", n);
+				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->avg_write_rate_kb_s,
+							ps->threads,
+							ps->number_of_records);
+				}
 			}
 			write_metric_block_json(&g_metrics[write_rate],arr,n);
 		}

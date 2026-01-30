@@ -68,13 +68,7 @@ static int getTimeFd(uint64_t interval_ms)
 
 static void run_snapshot_once()
 {
-	process_snapshot_status l_process_status = process_snapshot_error;
-	l_process_status = process_snapshot_initialize();
-	if(process_snapshot_success == l_process_status)
-	{
-		collect_snapshot();
-		process_snapshot_deinit();
-	}
+	collect_snapshot();
 }
 
 
@@ -98,6 +92,12 @@ int main(int argc, char **argv)
 					/*failed to delete old files, do not start the analyzer*/
 					return -1;
 				}
+			}
+
+			if(process_snapshot_success != process_snapshot_initialize())
+			{
+				//failed to initialize process snapshot
+				return -1;
 			}
 			int tfd = getTimeFd(gArguments.interval_ms);
 			if(tfd != -1)
@@ -135,6 +135,8 @@ int main(int argc, char **argv)
 					}
 					noOfIterations++;
 				}
+				//deinit snapshot
+				process_snapshot_deinit();
 				//print end of execution metrics
 				process_stats_print_metrics(&(gArguments.end_metrics_args),gArguments.interval_ms);
 			}

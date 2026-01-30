@@ -26,6 +26,7 @@
 static FILE* PSN_pfOutputFile = NULL;
 static FILE* PSN_pfOutputJsonlFile = NULL;
 static int g_lock_fd = -1;
+static DIR *dir = NULL;
 
 static void log_data(FILE* file, const char* fmt, ...);
 static void print_timestamp(double *timestamp, char* hr_timestamp);
@@ -46,7 +47,7 @@ static process_snapshot_status acquire_lock(const char* lock_file_path)
 	if (g_lock_fd < 0)
 	{
 		printf("acquire_lock: failed to open lock file\n");
-		return process_snapshot_error;
+		return process_snapshot_aquire_lock_failed;
 	}
 
 	// exclusive and non blocking lock
@@ -62,7 +63,7 @@ static process_snapshot_status acquire_lock(const char* lock_file_path)
 		}
 		close(g_lock_fd);
 		g_lock_fd = -1;
-		return process_snapshot_error;
+		return process_snapshot_aquire_lock_failed;
 	}
 	return process_snapshot_success;
 }
@@ -354,6 +355,44 @@ static void write_output_to_json(process_state_input_t* input)
 	}
 }
 
+static void handle_rotations(void)
+{
+	bool isRawLogEnabled = config_get_raw_log_enabled();
+	bool isJsonlEnabled = config_get_raw_jsonl_enabled();
+	char openfilePath[PATH_MAX];
+
+	if((false == isRawLogEnabled) && (false == isJsonlEnabled))
+	{
+		//no files required by configuration
+		return ;
+	}
+	if(true == isJsonlEnabled)
+	{
+		memset(openfilePath, 0x00, sizeof(openfilePath));
+		snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
+		off_t size = get_file_size(openfilePath);
+
+		if (size >= config_get_max_file_size_bytes())
+		{
+			rotate_logs(openfilePath);
+		}
+	}
+
+	if(true == isRawLogEnabled)
+	{
+		memset(openfilePath, 0x00, sizeof(openfilePath));
+		snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_JSON_FILE);
+		off_t size = get_file_size(openfilePath);
+
+		if (size >= config_get_max_file_size_bytes())
+		{
+			rotate_logs(openfilePath);
+		}
+
+	}
+
+}
+
 process_snapshot_status process_snapshot_delete_old_files(void)
 {
 	struct dirent *ent;
@@ -405,17 +444,16 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 
 process_snapshot_status collect_snapshot(void)
 {
-	DIR *dir = opendir(PROC_PATH);
-	if (!dir) {
-		fprintf(stderr,"failed to open /proc");
-		return process_snapshot_error;
-	}
+	//handle rotation
+	handle_rotations();
+
 	process_state_input_t process_data;
 
 	print_timestamp(&process_data.timestamp, process_data.h_r_timestamp);
 	log_data(PSN_pfOutputFile," SNAPSHOT START ################# \n");
 
 	struct dirent *de;
+	rewinddir(dir);
 	while ((de = readdir(dir)) != NULL) {
 
 		if (de->d_type != DT_DIR)
@@ -443,7 +481,6 @@ process_snapshot_status collect_snapshot(void)
 		}
 	}
 
-	closedir(dir);
 	log_data(PSN_pfOutputFile,"SNAPSHOT END ################# \n");
 	process_stats_snapshot_end();
 	return process_snapshot_success;
@@ -456,6 +493,13 @@ process_snapshot_status process_snapshot_initialize(void)
 
 	bool isRawLogEnabled = config_get_raw_log_enabled();
 	bool isJsonlEnabled = config_get_raw_jsonl_enabled();
+
+	dir = opendir(PROC_PATH);
+	if (!dir)
+	{
+		fprintf(stderr,"failed to open /proc");
+		return process_snapshot_error;
+	}
 
 	if((false == isRawLogEnabled) && (false == isJsonlEnabled))
 	{
@@ -472,11 +516,6 @@ process_snapshot_status process_snapshot_initialize(void)
 		{
 			memset(openfilePath, 0x00, sizeof(openfilePath));
 			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
-			off_t size = get_file_size(openfilePath);
-			if (size >= config_get_max_file_size_bytes())
-			{
-				rotate_logs(openfilePath);
-			}
 			PSN_pfOutputFile = fopen(openfilePath, "a");
 
 			if(!PSN_pfOutputFile)
@@ -499,12 +538,6 @@ process_snapshot_status process_snapshot_initialize(void)
 			//jsonl file handling
 			memset(openfilePath, 0x00, sizeof(openfilePath));
 			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_JSON_FILE);
-			off_t size = get_file_size(openfilePath);
-
-			if (size >= config_get_max_file_size_bytes())
-			{
-				rotate_logs(openfilePath);
-			}
 
 			PSN_pfOutputJsonlFile = fopen(openfilePath, "a");
 			if(!PSN_pfOutputJsonlFile)
@@ -531,6 +564,8 @@ process_snapshot_status process_snapshot_initialize(void)
 	return retVal;
 }
 
+
+
 void process_snapshot_deinit(void)
 {
 	if (g_lock_fd >= 0)
@@ -553,6 +588,14 @@ void process_snapshot_deinit(void)
 		if(fclose(PSN_pfOutputJsonlFile)!=0)
 		{
 			fprintf(stderr, "process_snapshot_deinit: Failed to close PSN_pfOutputJsonlFile!\n");
+		}
+	}
+
+	if(dir)
+	{
+		if(closedir(dir)!=0)
+		{
+			fprintf(stderr, "process_snapshot_deinit: Failed to close proc dir!\n");
 		}
 	}
 }

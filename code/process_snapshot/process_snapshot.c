@@ -185,7 +185,6 @@ static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
     	return;
 
 
-
     while (fgets(line, sizeof(line), f))
     {
         if (strncmp(line, "VmRSS:", 6) == 0)
@@ -197,8 +196,10 @@ static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
         }
         else if (strncmp(line, "Threads:", 8) == 0)
         {
-            sscanf(line + 8, "%d", &proc_data->threads);
-            threads_found = true;
+            if(sscanf(line + 8, "%d", &proc_data->threads)==1)
+            {
+            	threads_found = true;
+            }
         }
 
         if((true == proc_data->bo_is_rss_valid) && (true == threads_found))

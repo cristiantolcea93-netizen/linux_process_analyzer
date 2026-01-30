@@ -34,6 +34,7 @@ static int is_numeric(const char *s);
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
 static off_t get_file_size(const char *path);
 static void rotate_logs(char* filePath);
+static void rotate_and_reopen(FILE **pf, const char *path);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
 static void write_output_to_json(process_state_input_t* input);
@@ -101,6 +102,24 @@ static void rotate_logs(char* filePath)
     snprintf(new_path, sizeof(new_path),
              "%s.1", filePath);
     rename(old_path, new_path);
+}
+
+static void rotate_and_reopen(FILE **pf, const char *path)
+{
+    if (*pf)
+    {
+        fflush(*pf);
+        fclose(*pf);
+        *pf = NULL;
+    }
+
+    rotate_logs((char*)path);
+
+    *pf = fopen(path, "a");
+    if (!*pf)
+    {
+       fprintf(stderr,"fopen failed after rotate on %s", path);
+    }
 }
 
 
@@ -366,7 +385,7 @@ static void handle_rotations(void)
 		//no files required by configuration
 		return ;
 	}
-	if(true == isJsonlEnabled)
+	if(true == isRawLogEnabled)
 	{
 		memset(openfilePath, 0x00, sizeof(openfilePath));
 		snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
@@ -374,11 +393,11 @@ static void handle_rotations(void)
 
 		if (size >= config_get_max_file_size_bytes())
 		{
-			rotate_logs(openfilePath);
+			rotate_and_reopen(&PSN_pfOutputFile, openfilePath);
 		}
 	}
 
-	if(true == isRawLogEnabled)
+	if(true == isJsonlEnabled)
 	{
 		memset(openfilePath, 0x00, sizeof(openfilePath));
 		snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_JSON_FILE);
@@ -386,7 +405,7 @@ static void handle_rotations(void)
 
 		if (size >= config_get_max_file_size_bytes())
 		{
-			rotate_logs(openfilePath);
+			rotate_and_reopen(&PSN_pfOutputJsonlFile, openfilePath);
 		}
 
 	}

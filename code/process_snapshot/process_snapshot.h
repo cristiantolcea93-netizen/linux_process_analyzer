@@ -3,6 +3,7 @@
 
 typedef enum
 {
+	process_snapshot_aquire_lock_failed =-2,
 	process_snapshot_error=-1,
 	process_snapshot_success=0
 }process_snapshot_status;

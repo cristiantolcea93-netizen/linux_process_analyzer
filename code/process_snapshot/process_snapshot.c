@@ -26,16 +26,17 @@
 static FILE* PSN_pfOutputFile = NULL;
 static FILE* PSN_pfOutputJsonlFile = NULL;
 static int g_lock_fd = -1;
+static DIR *dir = NULL;
 
 static void log_data(FILE* file, const char* fmt, ...);
 static void print_timestamp(double *timestamp, char* hr_timestamp);
 static int is_numeric(const char *s);
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
-static int read_proc_threads(pid_t pid);
 static off_t get_file_size(const char *path);
 static void rotate_logs(char* filePath);
+static void rotate_and_reopen(FILE **pf, const char *path);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
-static int read_rss_status(pid_t pid, long *rss_kb);
+static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
 static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
 
@@ -47,7 +48,7 @@ static process_snapshot_status acquire_lock(const char* lock_file_path)
 	if (g_lock_fd < 0)
 	{
 		printf("acquire_lock: failed to open lock file\n");
-		return process_snapshot_error;
+		return process_snapshot_aquire_lock_failed;
 	}
 
 	// exclusive and non blocking lock
@@ -63,7 +64,7 @@ static process_snapshot_status acquire_lock(const char* lock_file_path)
 		}
 		close(g_lock_fd);
 		g_lock_fd = -1;
-		return process_snapshot_error;
+		return process_snapshot_aquire_lock_failed;
 	}
 	return process_snapshot_success;
 }
@@ -101,6 +102,24 @@ static void rotate_logs(char* filePath)
     snprintf(new_path, sizeof(new_path),
              "%s.1", filePath);
     rename(old_path, new_path);
+}
+
+static void rotate_and_reopen(FILE **pf, const char *path)
+{
+    if (*pf)
+    {
+        fflush(*pf);
+        fclose(*pf);
+        *pf = NULL;
+    }
+
+    rotate_logs((char*)path);
+
+    *pf = fopen(path, "a");
+    if (!*pf)
+    {
+       fprintf(stderr,"fopen failed after rotate on %s", path);
+    }
 }
 
 
@@ -170,28 +189,44 @@ static int is_numeric(const char *s)
     return 1;
 }
 
-static int read_rss_status(pid_t pid, long *rss_kb)
+static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
 {
     char path[64], line[256];
     snprintf(path, sizeof(path), "/proc/%d/status", pid);
 
+    bool threads_found = false;
+
+    proc_data->rssKb = -1;
+    proc_data->bo_is_rss_valid = false;
+    proc_data->threads = -1;
+
     FILE *f = fopen(path, "r");
-    if (!f) return -1;
+    if (!f)
+    	return;
+
 
     while (fgets(line, sizeof(line), f))
     {
         if (strncmp(line, "VmRSS:", 6) == 0)
         {
-            if(sscanf(line + 6, "%ld", rss_kb)==1)
+            if(sscanf(line + 6, "%ld", &proc_data->rssKb)==1)
             {
-            	fclose(f);
-            	return 0;
+            	proc_data->bo_is_rss_valid = true;
             }
         }
+        else if (strncmp(line, "Threads:", 8) == 0)
+        {
+            if(sscanf(line + 8, "%d", &proc_data->threads)==1)
+            {
+            	threads_found = true;
+            }
+        }
+
+        if((true == proc_data->bo_is_rss_valid) && (true == threads_found))
+        	break;
     }
 
     fclose(f);
-    return -1;
 }
 
 static int read_proc_io(pid_t pid, process_state_input_t *p)
@@ -237,7 +272,8 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 	if (!f)
 		return -1;
 
-	if (!fgets(buf, sizeof(buf), f)) {
+	if (!fgets(buf, sizeof(buf), f))
+	{
 		fclose(f);
 		return -1;
 	}
@@ -275,21 +311,7 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 		return -1;
 
 
-	ret = read_rss_status(pid, &proc_data->rssKb);
-
-	if(ret != 0)
-	{
-		//failed to get rss
-		proc_data->rssKb = -1;
-		proc_data->bo_is_rss_valid = false;
-	}
-	else
-	{
-		//rss available
-		proc_data->bo_is_rss_valid = true;
-	}
-
-
+	read_rss_status(pid, proc_data);
 
 	ret = read_proc_io(pid, proc_data);
 
@@ -308,8 +330,9 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 	}
 
 
-	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld ",
-			pid, proc_data->comm, proc_data->state, proc_data->ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes);
+	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d\n",
+			pid, proc_data->comm, proc_data->state, proc_data->ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes, proc_data->threads);
+
 
 	return 0;
 }
@@ -351,26 +374,42 @@ static void write_output_to_json(process_state_input_t* input)
 	}
 }
 
-static int read_proc_threads(pid_t pid)
+static void handle_rotations(void)
 {
-    char path[64];
-    char line[256];
-    int threads = -1;
+	bool isRawLogEnabled = config_get_raw_log_enabled();
+	bool isJsonlEnabled = config_get_raw_jsonl_enabled();
+	char openfilePath[PATH_MAX];
 
-    snprintf(path, sizeof(path), PROC_PATH "/%d/status", pid);
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return -1;
+	if((false == isRawLogEnabled) && (false == isJsonlEnabled))
+	{
+		//no files required by configuration
+		return ;
+	}
+	if(true == isRawLogEnabled)
+	{
+		memset(openfilePath, 0x00, sizeof(openfilePath));
+		snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
+		off_t size = get_file_size(openfilePath);
 
-    while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "Threads:", 8) == 0) {
-            sscanf(line + 8, "%d", &threads);
-            break;
-        }
-    }
-    fclose(f);
+		if (size >= config_get_max_file_size_bytes())
+		{
+			rotate_and_reopen(&PSN_pfOutputFile, openfilePath);
+		}
+	}
 
-    return threads;
+	if(true == isJsonlEnabled)
+	{
+		memset(openfilePath, 0x00, sizeof(openfilePath));
+		snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_JSON_FILE);
+		off_t size = get_file_size(openfilePath);
+
+		if (size >= config_get_max_file_size_bytes())
+		{
+			rotate_and_reopen(&PSN_pfOutputJsonlFile, openfilePath);
+		}
+
+	}
+
 }
 
 process_snapshot_status process_snapshot_delete_old_files(void)
@@ -424,17 +463,16 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 
 process_snapshot_status collect_snapshot(void)
 {
-	DIR *dir = opendir(PROC_PATH);
-	if (!dir) {
-		fprintf(stderr,"failed to open /proc");
-		return process_snapshot_error;
-	}
+	//handle rotation
+	handle_rotations();
+
 	process_state_input_t process_data;
 
 	print_timestamp(&process_data.timestamp, process_data.h_r_timestamp);
 	log_data(PSN_pfOutputFile," SNAPSHOT START ################# \n");
 
 	struct dirent *de;
+	rewinddir(dir);
 	while ((de = readdir(dir)) != NULL) {
 
 		if (de->d_type != DT_DIR)
@@ -452,12 +490,8 @@ process_snapshot_status collect_snapshot(void)
 				continue;
 		}
 
-		if (read_proc_stat(process_data.pid,&process_data) == 0) {
-			process_data.threads = read_proc_threads(process_data.pid);
-			if (process_data.threads >= 0){
-				log_data(PSN_pfOutputFile,"THREADS=%d\n", process_data.threads);
-			}
-
+		if (read_proc_stat(process_data.pid,&process_data) == 0)
+		{
 			//feed the data to process_stat
 			process_stats_update(&process_data);
 
@@ -466,7 +500,6 @@ process_snapshot_status collect_snapshot(void)
 		}
 	}
 
-	closedir(dir);
 	log_data(PSN_pfOutputFile,"SNAPSHOT END ################# \n");
 	process_stats_snapshot_end();
 	return process_snapshot_success;
@@ -479,6 +512,13 @@ process_snapshot_status process_snapshot_initialize(void)
 
 	bool isRawLogEnabled = config_get_raw_log_enabled();
 	bool isJsonlEnabled = config_get_raw_jsonl_enabled();
+
+	dir = opendir(PROC_PATH);
+	if (!dir)
+	{
+		fprintf(stderr,"failed to open /proc");
+		return process_snapshot_error;
+	}
 
 	if((false == isRawLogEnabled) && (false == isJsonlEnabled))
 	{
@@ -495,11 +535,6 @@ process_snapshot_status process_snapshot_initialize(void)
 		{
 			memset(openfilePath, 0x00, sizeof(openfilePath));
 			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_LOG_FILE);
-			off_t size = get_file_size(openfilePath);
-			if (size >= config_get_max_file_size_bytes())
-			{
-				rotate_logs(openfilePath);
-			}
 			PSN_pfOutputFile = fopen(openfilePath, "a");
 
 			if(!PSN_pfOutputFile)
@@ -522,12 +557,6 @@ process_snapshot_status process_snapshot_initialize(void)
 			//jsonl file handling
 			memset(openfilePath, 0x00, sizeof(openfilePath));
 			snprintf(openfilePath, sizeof(openfilePath), "%s/%s", config_get_output_dir(), CONFIG_JSON_FILE);
-			off_t size = get_file_size(openfilePath);
-
-			if (size >= config_get_max_file_size_bytes())
-			{
-				rotate_logs(openfilePath);
-			}
 
 			PSN_pfOutputJsonlFile = fopen(openfilePath, "a");
 			if(!PSN_pfOutputJsonlFile)
@@ -554,6 +583,8 @@ process_snapshot_status process_snapshot_initialize(void)
 	return retVal;
 }
 
+
+
 void process_snapshot_deinit(void)
 {
 	if (g_lock_fd >= 0)
@@ -576,6 +607,14 @@ void process_snapshot_deinit(void)
 		if(fclose(PSN_pfOutputJsonlFile)!=0)
 		{
 			fprintf(stderr, "process_snapshot_deinit: Failed to close PSN_pfOutputJsonlFile!\n");
+		}
+	}
+
+	if(dir)
+	{
+		if(closedir(dir)!=0)
+		{
+			fprintf(stderr, "process_snapshot_deinit: Failed to close proc dir!\n");
 		}
 	}
 }

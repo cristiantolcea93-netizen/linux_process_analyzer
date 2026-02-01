@@ -182,12 +182,17 @@ static void print_timestamp(double *timestamp, char* hr_timestamp)
 
 static int is_numeric(const char *s)
 {
+    if (!s || *s == '\0')
+        return 0;
+
     for (; *s; s++) {
-        if (!isdigit(*s))
+        if (!isdigit((unsigned char)*s))
             return 0;
     }
+
     return 1;
 }
+
 
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
 {

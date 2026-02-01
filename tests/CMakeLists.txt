@@ -47,3 +47,24 @@ add_test(
     NAME test_config
     COMMAND test_config
 )
+
+add_executable(test_process_snapshot
+    test_process_snapshot.c
+)
+
+target_include_directories(test_process_snapshot PRIVATE
+    ../code/process_snapshot
+    ../code/process_stats
+    ../code/config
+    ../code/args_parser
+    unity/src
+)
+
+target_link_libraries(test_process_snapshot
+    unity
+)
+
+add_test(
+    NAME test_process_snapshot
+    COMMAND test_process_snapshot
+)

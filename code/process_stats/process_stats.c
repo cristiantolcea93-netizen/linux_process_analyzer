@@ -14,6 +14,7 @@
 #include "args_parser.h"
 
 
+#ifndef UNIT_TEST
 typedef struct{
 
 	/* current values */
@@ -63,6 +64,7 @@ typedef struct{
 
 	UT_hash_handle hh;
 } process_state_t;
+#endif
 
 typedef enum {
 	METRIC_DOUBLE,
@@ -971,3 +973,42 @@ void process_stats_update(process_state_input_t* input)
 	}
 
 }
+
+void process_stats_deinit(void)
+{
+    process_state_t *cur, *tmp;
+
+    /* Free process hash table */
+    HASH_ITER(hh, g_process_table, cur, tmp)
+    {
+        HASH_DEL(g_process_table, cur);
+        free(cur);
+    }
+
+    g_process_table = NULL;
+
+    /* Close metrics file if open */
+    if (pfJsonOutput)
+    {
+        fflush(pfJsonOutput);
+        fclose(pfJsonOutput);
+        pfJsonOutput = NULL;
+    }
+
+    /* Reset globals */
+    is_module_initialized   = false;
+    prog_name               = NULL;
+    g_number_of_snapshots   = 0;
+    boIsFirstJsonMetric     = true;
+
+    memset(h_r_initial_timestamp, 0, sizeof(h_r_initial_timestamp));
+    memset(h_r_last_timestamp, 0, sizeof(h_r_last_timestamp));
+}
+
+
+#ifdef UNIT_TEST
+process_state_t* process_stats_get_all(void)
+{
+    return g_process_table;
+}
+#endif

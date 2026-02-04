@@ -98,3 +98,32 @@ add_test(
 
 target_compile_definitions(test_process_stats PRIVATE UNIT_TEST)
 
+
+# ------------------------
+# Args parser test
+# ------------------------
+add_executable(test_args_parser
+    test_args_parser.c
+    ../code/args_parser/args_parser.c
+    ../code/config/config.c
+    ../code/process_stats/process_stats.c
+)
+
+target_include_directories(test_args_parser PRIVATE
+    ../code/args_parser
+    ../code/process_stats
+    ../code/process_snapshot
+    ../code/config
+    ../code/third_party/uthash
+    unity/src
+)
+
+target_link_libraries(test_args_parser
+    unity
+)
+
+add_test(
+    NAME test_args_parser
+    COMMAND test_args_parser
+)
+

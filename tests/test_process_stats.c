@@ -1,6 +1,7 @@
 #include "unity.h"
 
 #include "../code/process_stats/process_stats.h"
+#include "../code/config/config.h"
 
 #include <string.h>
 

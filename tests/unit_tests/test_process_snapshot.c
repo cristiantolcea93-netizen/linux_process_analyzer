@@ -3,10 +3,15 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "../code/process_stats/process_stats.h"
-#include "../code/config/config.h"
+#include "../../code/process_stats/process_stats.h"
+#include "../../code/config/config.h"
 
+#include "../../code/process_snapshot/process_snapshot.c"
 
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 // ---- MOCK CONFIG ----
 
@@ -55,18 +60,6 @@ void process_stats_update(process_state_input_t* input)
 void process_stats_snapshot_end(void)
 {
 }
-
-
-
-
-
-
-#include "../code/process_snapshot/process_snapshot.c"
-
-#include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
 
 void setUp(void) {}
 void tearDown(void) {}

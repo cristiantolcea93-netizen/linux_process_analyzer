@@ -54,7 +54,7 @@ void test_config_valid_file(void)
     config_status ret;
 
     setenv("PROCESS_ANALYZER_CONFIG",
-           "../../tests/test_data/valid.conf",
+           "../../../tests/unit_tests/test_data/valid.conf",
            1);
 
     ret = config_init();
@@ -84,7 +84,7 @@ void test_config_invalid_file(void)
     config_status ret;
 
     setenv("PROCESS_ANALYZER_CONFIG",
-           "../../tests/test_data/invalid.conf",
+           "../../../tests/unit_tests/test_data/invalid.conf",
            1);
 
     ret = config_init();

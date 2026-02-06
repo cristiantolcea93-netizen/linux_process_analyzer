@@ -1,7 +1,7 @@
 #include "unity.h"
 
-#include "../code/process_stats/process_stats.h"
-#include "../code/config/config.h"
+#include "../../code/process_stats/process_stats.h"
+#include "../../code/config/config.h"
 
 #include <string.h>
 
@@ -114,7 +114,7 @@ void test_multiple_updates_same_pid(void)
 
     //need to set a config without json file write to avoid test seg fault when calling process_stats_print_metrics
     setenv("PROCESS_ANALYZER_CONFIG",
-               "../../tests/test_data/valid.conf",
+               "../../../tests/unit_tests/test_data/valid.conf",
                1);
     config_init();
 

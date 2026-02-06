@@ -1,6 +1,6 @@
 #include "unity.h"
 
-#include "../code/args_parser/args_parser.h"
+#include "../../code/args_parser/args_parser.h"
 
 #include <string.h>
 #include <stdlib.h>

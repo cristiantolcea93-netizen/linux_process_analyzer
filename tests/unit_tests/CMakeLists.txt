@@ -23,12 +23,12 @@ target_include_directories(unity PUBLIC
 
 add_executable(test_config
     test_config.c
-    ../code/config/config.c
+    ../../code/config/config.c
 )
 
 
 target_include_directories(test_config PRIVATE
-    ../code/config
+    ../../code/config
     unity/src
 )
 
@@ -52,10 +52,10 @@ add_executable(test_process_snapshot
 )
 
 target_include_directories(test_process_snapshot PRIVATE
-    ../code/process_snapshot
-    ../code/process_stats
-    ../code/config
-    ../code/args_parser
+    ../../code/process_snapshot
+    ../../code/process_stats
+    ../../code/config
+    ../../code/args_parser
     unity/src
 )
 
@@ -74,16 +74,16 @@ add_test(
 
 add_executable(test_process_stats
     test_process_stats.c
-    ../code/process_stats/process_stats.c
-    ../code/config/config.c
+    ../../code/process_stats/process_stats.c
+    ../../code/config/config.c
 )
 
 target_include_directories(test_process_stats PRIVATE
-    ../code/process_stats
-    ../code/process_snapshot
-    ../code/third_party/uthash
-    ../code/config
-    ../code/args_parser
+    ../../code/process_stats
+    ../../code/process_snapshot
+    ../../code/third_party/uthash
+    ../../code/config
+    ../../code/args_parser
     unity/src
 )
 
@@ -104,17 +104,17 @@ target_compile_definitions(test_process_stats PRIVATE UNIT_TEST)
 # ------------------------
 add_executable(test_args_parser
     test_args_parser.c
-    ../code/args_parser/args_parser.c
-    ../code/config/config.c
-    ../code/process_stats/process_stats.c
+    ../../code/args_parser/args_parser.c
+    ../../code/config/config.c
+    ../../code/process_stats/process_stats.c
 )
 
 target_include_directories(test_args_parser PRIVATE
-    ../code/args_parser
-    ../code/process_stats
-    ../code/process_snapshot
-    ../code/config
-    ../code/third_party/uthash
+    ../../code/args_parser
+    ../../code/process_stats
+    ../../code/process_snapshot
+    ../../code/config
+    ../../code/third_party/uthash
     unity/src
 )
 

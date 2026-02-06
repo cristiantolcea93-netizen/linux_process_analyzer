@@ -248,12 +248,45 @@ Notes:
 
 ## Build Instructions
 
+### Recommended (Root Scripts)
+
+The recommended way to build the project is using the helper scripts from the
+project root directory:
+
 ```bash
-cd code
 ./make.sh
 ```
 
 Or:
+
+```bash
+./makeAll.sh
+```
+Both scripts support the following optional parameters:
+-includeUnitTests
+-includeIntegrationTests
+
+Examples: 
+
+```bash
+# Build only
+./make.sh
+
+# Build + unit tests
+./make.sh -includeUnitTests
+
+# Build + unit + integration tests
+./make.sh -includeUnitTests -includeIntegrationTests
+```
+If no parameters are provided, only the build is executed.
+
+### Manual Build (Advanced / Development Use)
+
+```bash
+cd code
+./make.sh
+```
+Or using Ninja:
 
 ```bash
 mkdir build
@@ -262,33 +295,55 @@ cmake ..
 ninja
 ```
 
+Note: Manual builds do not run tests automatically.
+For full validation, use the root build scripts.
+
 ---
 
 ## Project Structure
 
 ```
-code/
-├── process_analyzer.c          # main entry point
-├── args_parser/
-│   ├── args_parser.c
-│   └── args_parser.h
-├── config/
-│   ├── config.c
-|   └── config.h
-├── process_snapshot/
-│   ├── process_snapshot.c
-│   └── process_snapshot.h
-├── process_stats/
-│   ├── process_stats.c
-│   └── process_stats.h
-├── third_party/
-│   └── uthash/
-│       └── uthash.h
-├── CMakeLists.txt
-└── make.sh
+├── code/ # Core source code
+│ ├── process_analyzer.c # Main entry point
+│ ├── args_parser/
+│ │ ├── args_parser.c
+│ │ └── args_parser.h
+│ ├── config/
+│ │ ├── config.c
+│ │ └── config.h
+│ ├── process_snapshot/
+│ │ ├── process_snapshot.c
+│ │ └── process_snapshot.h
+│ ├── process_stats/
+│ │ ├── process_stats.c
+│ │ └── process_stats.h
+│ ├── third_party/
+│ │ └── uthash/
+│ │ └── uthash.h
+│ └── CMakeLists.txt
+│
+├── tests/ # Test suites
+│ ├── unit/ # Unit tests
+│ └── integration/ # Integration tests
+│
+├── make.sh # Main build script
+├── makeAll.sh # Clean + full rebuild script
 ```
 
 ---
+
+## Testing
+
+The project includes both unit tests and integration tests.
+
+- Unit tests validate individual modules
+- Integration tests validate real execution scenarios
+
+Tests can be enabled using:
+
+```bash
+./make.sh -includeUnitTests -includeIntegrationTests
+```
 
 ## Limitations & Notes
 

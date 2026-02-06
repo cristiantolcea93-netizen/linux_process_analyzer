@@ -7,8 +7,12 @@ build/
 code/build/
 cmake-build-*/
 out/
+Debug/
 
+############################
 # C / C++ artifacts
+############################
+
 *.o
 *.a
 *.so
@@ -23,7 +27,7 @@ process_analyzer
 
 
 ############################
-# CMake / Ninja
+# CMake / Ninja / CTest
 ############################
 
 CMakeCache.txt
@@ -32,6 +36,10 @@ cmake_install.cmake
 compile_commands.json
 .ninja_log
 .ninja_deps
+
+Testing/
+CTestTestfile.cmake
+DartConfiguration.tcl
 
 
 ############################
@@ -51,7 +59,7 @@ compile_commands.json
 # IDEs / Editors
 ############################
 
-# Eclipse (root + code/)
+# Eclipse
 .project
 .cproject
 .settings/
@@ -79,10 +87,11 @@ code/.clangd
 ############################
 
 .DS_Store
+Thumbs.db
 
 
 ############################
-# Tests / Coverage (future-proof)
+# Tests / Coverage
 ############################
 
 coverage/
@@ -100,4 +109,3 @@ __pycache__/
 *.pyo
 *.pyd
 .venv/
-

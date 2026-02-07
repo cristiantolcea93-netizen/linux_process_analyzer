@@ -1,7 +1,7 @@
 # Linux Process Analyzer
 
 [![CI](https://github.com/roxana/linux_process_analyzer/actions/workflows/ci.yml/badge.svg)]
-(https://github.com/cristiantolcea93-netizen/linux_process_analyzer/tree/main/.github/workflows/ci.yml)
+(https://github.com/cristiantolcea93-netizen/linux_process_analyzer/tree/main/.github/workflows/ci.yml/badge.svg)
 
 `process_analyzer` is a lightweight Linux command-line tool written in C that periodically samples process information from `/proc` and provides aggregated statistics at the end of execution.
 

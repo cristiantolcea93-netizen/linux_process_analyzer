@@ -1,5 +1,7 @@
 # Linux Process Analyzer
 
+[![CI](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml)
+
 `process_analyzer` is a lightweight Linux command-line tool written in C that periodically samples process information from `/proc` and provides aggregated statistics at the end of execution.
 
 The tool is designed for **low-overhead monitoring**, accurate **time-based calculations**, and **post-run analysis** of CPU, memory (RSS), and disk I/O usage per process.
@@ -19,8 +21,8 @@ The tool is designed for **low-overhead monitoring**, accurate **time-based calc
   - Average disk read/write rate (KB/s)
 - Snapshot logging with log rotation
 - Graceful shutdown on `CTRL+C` or `SIGTERM`
-- Supports infinite runtime mode
-- Minimal runtime dependencies (glibc only)
+- Supports infinite runtime mode (`-n infinity`)
+- Minimal runtime dependencies (glibc, procfs)
 
 ---
 
@@ -75,7 +77,7 @@ export PROCESS_ANALYZER_CONFIG=/path/to/configuration.config
 
 If the variable is not set, default values are used.
 
-If a configuration file is present but invalid, the program exits with an error.
+If a configuration file is present but invalid, the program exits with an error before starting sampling.
 
 ---
 
@@ -263,8 +265,10 @@ Or:
 ./makeAll.sh
 ```
 Both scripts support the following optional parameters:
--includeUnitTests
--includeIntegrationTests
+
+- `-includeUnitTests`
+- `-includeIntegrationTests`
+
 
 Examples: 
 
@@ -319,7 +323,7 @@ For full validation, use the root build scripts.
 │ │ └── process_stats.h
 │ ├── third_party/
 │ │ └── uthash/
-│ │ └── uthash.h
+│ │ 	└── uthash.h
 │ └── CMakeLists.txt
 │
 ├── tests/ # Test suites
@@ -343,6 +347,9 @@ Tests can be enabled using:
 
 ```bash
 ./make.sh -includeUnitTests -includeIntegrationTests
+# or
+./makeAll.sh -includeUnitTests -includeIntegrationTests
+th scripts support the following optional paramet
 ```
 
 ## Limitations & Notes

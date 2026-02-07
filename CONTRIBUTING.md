@@ -12,8 +12,8 @@ This project aims to remain **clean, predictable, and easy to maintain**, so a f
 - **All changes must go through a Pull Request**
 - **Direct pushes to `main` are not allowed**
 - **At least one approval from the project maintainer is required**
-- Small, focused PRs are preferred over large, mixed changes
-- New features should be discussed before implementation
+- Prefer small, focused PRs
+- New features should be discussed first
 
 ---
 
@@ -24,7 +24,7 @@ This project aims to remain **clean, predictable, and easy to maintain**, so a f
 - Performance improvements
 - Code refactoring (no functional change)
 - Documentation improvements
-- Tests
+- Unit and integration tests
 - New metrics (must fit the existing model)
 
 ### ⚠️ Discuss First
@@ -34,32 +34,107 @@ Please open an issue before working on:
 - Changes to output format
 - Architectural changes
 - Plugin system extensions
+- Major refactoring
 
 ### ❌ Not Accepted
 - Breaking changes without discussion
-- Style-only changes with no functional value
+- Cosmetic-only changes
 - Features that significantly increase runtime overhead
-- Platform-specific code outside Linux
+- Non-Linux platforms
 
 ---
 
 ## Development Workflow
 
-1. Fork the repository
-2. Create a feature branch:
-   ```bash
-   git checkout -b feature/my-change
-   ```
-3. Make your changes
-4. Ensure the project builds cleanly:
-   ```bash
-   cd code && make.sh
-   ```
-5. Run any available tests
-6. Commit with a clear message
-7. Open a Pull Request against `main`
+- Fork the repository
+- Create a feature branch:
+      
+```bash
+git checkout -b feature/my-change
+```
+- Make your changes
+- Ensure the project builds cleanly:
+
+```bash
+./make.sh
+```
+   or 
+   
+```bash
+./makeAll.sh
+```
+- Run any available tests (recommended before PR):
+	
+```bash
+./makeAll.sh -includeUnitTests -includeIntegrationTests
+```
+- Commit with a clear message
+- Open a Pull Request against `main`
 
 ---
+
+## Build System
+The official build entry points are:
+
+```bash
+./make.sh
+./makeAll.sh
+```
+Both scripts support:
+- `-includeUnitTests`
+- `-includeIntegrationTests`
+If no parameters are provided, only a build is performed.
+
+## Testing
+
+### Unit Tests
+- Implemented using Unity
+- Located in `tests/unit_tests`
+- Run automatically via CTest
+- Cover core modules:
+	-process_stats
+	-process_snapshot
+	-args_parser
+	-config
+
+Run manually: 
+
+```bash
+./makeAll.sh -includeUnitTests
+```
+### Integration Tests
+
+- Implemented as shell scripts
+- Located in: `tests/integration/`
+- Validate real execution scenarios
+- Use tools such as:
+  - `jq`
+  - `stress-ng`
+
+Run manually:
+
+```bash
+./makeAll.sh -includeIntegrationTests
+```
+
+### Writing tests
+
+When adding new features:
+
+- Add unit tests when possible
+- Add integration tests for system-level behavior
+- Avoid relying on specific process names
+- Prefer deterministic checks 
+
+## Continous Integration (CI) 
+This project uses **GitHub Actions** for CI.
+On every Pull Request and push to `main`, the following are executed:
+- Full build
+- Unit tests
+- Integration tests
+
+CI must pass before a PR can be merged.
+If CI fails, the PR will not be accepted.
 
 ## Coding Guidelines
 
@@ -67,8 +142,8 @@ Please open an issue before working on:
 - Follow existing code style
 - Prefer clarity over cleverness
 - Avoid macros unless absolutely necessary
-- No dynamic allocation in hot paths unless justified
-- Handle errors explicitly
+- Avoid allocations in hot paths
+- Handle all error cases
 
 ### Time & Metrics
 - Use `CLOCK_MONOTONIC` for all calculations
@@ -99,14 +174,6 @@ fix
 updates
 misc changes
 ```
-
----
-
-## Testing
-
-- New features should include tests where applicable
-- Bug fixes should include a regression test if possible
-- Tests must not depend on system-specific process names
 
 ---
 

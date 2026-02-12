@@ -13,10 +13,6 @@ body {
     background: #f8f9fa;
 }
 
-h1 {
-    text-align: center;
-}
-
 .section {
     margin-top: 30px;
 }
@@ -49,18 +45,53 @@ th, td {
 th {
     background: #eee;
 }
+
+.header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.nav-btn:hover {
+    background-color: #0056b3;
+}
+
+#processInfo {
+    position: sticky;
+    top: 10px;
+	border-left: 4px solid #007bff;
+}
+
+
+
 </style>
 </head>
 
 <body>
 
-<h1>📊 Process Analyzer Report</h1>
+<div class="header-bar">
+	<h1>📊 Process Analyzer Report</h1>
+	<button class="nav-btn" onclick="window.open('records.html','_blank')">
+	View Records Timeline
+	</button>
+</div>
 
 <div class="section">
     <input type="file" id="fileInput" accept=".json">
 </div>
 
 <div class="section meta-box" id="meta"></div>
+<div class="section meta-box" id="processInfo" style="display:none;"></div>
 
 <div class="section">
     <div class="chart-container">
@@ -107,6 +138,19 @@ let rssIncreaseChart, rssDeltaChart, kbytesReadChart, kbytesWrittenChart;
 
 document.getElementById("fileInput")
     .addEventListener("change", loadFile);
+	
+function showProcessInfo(process) {
+	const box = document.getElementById("processInfo");
+
+	box.style.display = "block";
+	box.innerHTML = `
+	<b>Process:</b> ${process.comm}<br>
+	<b>PID:</b> ${process.pid}<br>
+	<b>Threads:</b> ${process.threads}<br>
+	<b>Records:</b> ${process.records}
+	`;
+	}
+
 
 function loadFile(e) {
     const file = e.target.files[0];
@@ -117,6 +161,7 @@ function loadFile(e) {
     reader.onload = function(ev) {
         const json = JSON.parse(ev.target.result);
         renderDashboard(json);
+		localStorage.setItem("lastMetrics", ev.target.result);
     };
 
     reader.readAsText(file);
@@ -154,20 +199,23 @@ function renderCPU(list) {
 
     if (cpuChart) cpuChart.destroy();
 
-    cpuChart = new Chart(
-        document.getElementById("cpuChart"),
-        {
-            type: "bar",
-            data: {
-                labels,
-                datasets: [{
-                    label: "CPU %",
-                    data: values,
-                    backgroundColor: "#007bff"
-                }]
-            }
-        }
-    );
+	cpuChart = new Chart(
+	    document.getElementById("cpuChart"),
+	    {
+	        type: "bar",
+	        data: {
+	            labels,
+	            datasets: [{
+	                label: "CPU %",
+	                data: values,
+	                backgroundColor: "#007bff"
+	            },
+			]
+	        },
+			options: buildChartOptions(list)
+	    }
+	);
+
 }
 
 function renderRSS(list) {
@@ -188,9 +236,10 @@ function renderRSS(list) {
                     data: values,
                     backgroundColor: "#28a745"
                 }]
-            }
-        }
-    );
+            },
+			options: buildChartOptions(list)
+		}
+	);
 }
 
 function renderReadRate(readList) {
@@ -214,9 +263,11 @@ function renderReadRate(readList) {
                         backgroundColor: "#ffc107"
                     }
                 ]
-            }
-        }
-    );
+            },
+			options: buildChartOptions(readList)
+
+		}
+	);
 }
 
 function renderWriteRate(writeList) {
@@ -240,9 +291,10 @@ function renderWriteRate(writeList) {
                         backgroundColor: "#FF00FF"
                     }
                 ]
-            }
-        }
-    );
+            },
+			options: buildChartOptions(writeList)
+		}
+	);
 }
 
 function renderRSSIncrease(list) {
@@ -264,9 +316,10 @@ function renderRSSIncrease(list) {
                     data: values,
                     backgroundColor: "#17a2b8"
                 }]
-            }
-        }
-    );
+            },
+			options: buildChartOptions(list)
+		}
+	);
 }
 
 function renderRSSDelta(list) {
@@ -288,11 +341,13 @@ function renderRSSDelta(list) {
                     data: values,
                     backgroundColor: "#dc3545"
                 }]
-            }
-        }
-    );
-}
+            },
+			options: buildChartOptions(list)
 
+		}
+	);
+}
+   
 function renderKbytesRead(list) {
     if (list.length === 0) return;
 
@@ -312,9 +367,10 @@ function renderKbytesRead(list) {
                     data: values,
                     backgroundColor: "#6f42c1"
                 }]
-            }
-        }
-    );
+            },
+			options: buildChartOptions(list)
+		}
+	);
 }
 
 function renderKbytesWritten(list) {
@@ -336,10 +392,62 @@ function renderKbytesWritten(list) {
                     data: values,
                     backgroundColor: "#fd7e14"
                 }]
-            }
-        }
-    );
+            },
+			options: buildChartOptions(list)
+		}
+	);
 }
+
+function chartClickHandler(list) {
+    return (evt, elements) => {
+        if (!elements.length) return;
+
+        const index = elements[0].index;
+        const process = list[index];
+
+        showProcessInfo(process);
+
+        window.open(`records.html?pid=${process.pid}`, "_blank");
+    };
+}
+
+function buildChartOptions(list) {
+    return {
+        interaction: {
+            mode: 'nearest',
+            intersect: true
+        },
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const index = context.dataIndex;
+                        const process = list[index];
+
+                        return [
+                            `PID: ${process.pid}`,
+							`Records: ${process.records}`,
+							`Threads: ${process.threads}`,
+                            `${context.dataset.label}: ${context.raw}`
+                        ];
+                    }
+                }
+            }
+        },
+        onClick: chartClickHandler(list)
+    };
+}
+
+
+window.addEventListener("load", () => {
+    const saved = localStorage.getItem("lastMetrics");
+    if (saved) {
+        try {
+            const json = JSON.parse(saved);
+            renderDashboard(json);
+        } catch {}
+    }
+});
 
 
 </script>

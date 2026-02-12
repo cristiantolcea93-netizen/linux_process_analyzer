@@ -87,6 +87,12 @@ th {
 
 let pidMap = {};
 let timelineChart = null;
+
+function getPIDFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("pid");
+}
+
 		
 function parseJSONL(text) {
     const lines = text.trim().split("\n");
@@ -213,18 +219,24 @@ function loadFile(e) {
 
     const reader = new FileReader();
 
-    reader.onload = function(ev) {
+	reader.onload = function(ev) {
 
-        const text = ev.target.result;
+	    const text = ev.target.result;
 
-        const records = parseJSONL(text);
+	    const records = parseJSONL(text);
 
-        pidMap = groupByPID(records);
+	    pidMap = groupByPID(records);
 
-        populatePIDSelect(pidMap);
+	    populatePIDSelect(pidMap);
 
-        updateChart(); // prima afișare
-    };
+	    const pidFromURL = getPIDFromURL();
+	    if (pidFromURL && pidMap[pidFromURL]) {
+	        document.getElementById("pidSelect").value = pidFromURL;
+	    }
+
+	    updateChart();
+	};
+
 
     reader.readAsText(file);
 }

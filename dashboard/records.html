@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Process Analyzer Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: #f8f9fa;
+}
+
+h1 {
+    text-align: center;
+}
+
+.section {
+    margin-top: 30px;
+}
+
+.meta-box {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+.chart-container {
+    width: 45%;
+    display: inline-block;
+    margin: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+th, td {
+    padding: 8px;
+    border: 1px solid #ddd;
+    text-align: center;
+}
+
+th {
+    background: #eee;
+}
+</style>
+</head>
+
+<body>
+
+<h1>📊 Records </h1>
+
+<div class="section">
+
+    <input type="file" id="fileInput" accept=".jsonl">
+
+    <br><br>
+
+    PID:
+    <select id="pidSelect"></select>
+
+    Metric:
+    <select id="metricSelect">
+        <option value="rss">RSS (MB)</option>
+        <option value="cpu">CPU Time</option>
+        <option value="read">Read KB</option>
+        <option value="write">Write KB</option>
+        <option value="threads">Threads</option>
+    </select>
+
+</div>
+
+<div class="section">
+    <canvas id="timelineChart"></canvas>
+</div>
+
+
+<script>
+
+let pidMap = {};
+let timelineChart = null;
+
+function getPIDFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("pid");
+}
+
+		
+function parseJSONL(text) {
+    const lines = text.trim().split("\n");
+
+    const records = [];
+
+    for (const line of lines) {
+        try {
+            records.push(JSON.parse(line));
+        } catch {
+            // skip bad lines
+        }
+    }
+
+    return records;
+}
+
+function groupByPID(records) {
+    const map = {};
+
+    for (const r of records) {
+        if (!map[r.pid]) {
+            map[r.pid] = [];
+        }
+        map[r.pid].push(r);
+    }
+
+    return map;
+}
+
+function populatePIDSelect(pidMap) {
+    const sel = document.getElementById("pidSelect");
+    sel.innerHTML = "";
+
+    Object.keys(pidMap).forEach(pid => {
+        const opt = document.createElement("option");
+        opt.value = pid;
+        opt.text = `${pid} (${pidMap[pid][0].comm})`;
+        sel.appendChild(opt);
+    });
+}
+
+function extractSeries(list, metric) {
+    const points = [];
+
+    for (const r of list) {
+        let val = null;
+
+        switch(metric) {
+            case "rss":
+                if (r.rss_kb >= 0)
+                    val = r.rss_kb / 1024;
+                break;
+
+            case "cpu":
+                val = r.utime + r.stime;
+                break;
+
+            case "read":
+                if (r.io_read_kb >= 0)
+                    val = r.io_read_kb;
+                break;
+
+            case "write":
+                if (r.io_write_kb >= 0)
+                    val = r.io_write_kb;
+                break;
+
+            case "threads":
+                val = r.threads;
+                break;
+        }
+
+        if (val !== null) {
+            points.push({
+                x: new Date(r.timestamp.replace(" ", "T")),
+                y: val
+            });
+        }
+    }
+
+    return points;
+}
+
+function renderTimeline(points, label) {
+
+    if (timelineChart)
+        timelineChart.destroy();
+
+    timelineChart = new Chart(
+        document.getElementById("timelineChart"),
+        {
+            type: "line",
+            data: {
+                datasets: [{
+                    label,
+                    data: points,
+                    borderColor: "#007bff",
+                    fill: false,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        type: "time",
+                        time: {
+                            unit: "second"
+                        }
+                    }
+                }
+            }
+        }
+    );
+}
+
+document.getElementById("fileInput")
+    .addEventListener("change", loadFile);
+
+function loadFile(e) {
+
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+	reader.onload = function(ev) {
+
+	    const text = ev.target.result;
+
+	    const records = parseJSONL(text);
+
+	    pidMap = groupByPID(records);
+
+	    populatePIDSelect(pidMap);
+
+	    const pidFromURL = getPIDFromURL();
+	    if (pidFromURL && pidMap[pidFromURL]) {
+	        document.getElementById("pidSelect").value = pidFromURL;
+	    }
+
+	    updateChart();
+	};
+
+
+    reader.readAsText(file);
+}
+
+document.getElementById("pidSelect")
+    .addEventListener("change", updateChart);
+
+document.getElementById("metricSelect")
+    .addEventListener("change", updateChart);
+
+
+function updateChart() {
+
+	const pid = document.getElementById("pidSelect").value;
+	const metric = document.getElementById("metricSelect").value;
+
+	if (!pid || !pidMap[pid]) return;
+
+	const list = pidMap[pid];
+
+	const points = extractSeries(list, metric);
+
+	if (points.length === 0) {
+	    alert("No valid data for this metric");
+	    return;
+	}
+
+	const label = `${list[0].comm} (PID ${pid}) - ${metric}`;
+
+	renderTimeline(points, label);
+}
+
+
+</script>
+
+
+
+</body>
+</html>

@@ -53,6 +53,35 @@ At the end of execution (or when interrupted), the requested metrics are calcula
 
 ---
 
+## Demo
+
+### CLI Usage Demo
+
+A short walkthrough of `process_analyzer` running from the command line,  
+including sampling, metrics generation, and output files.
+
+[Watch demo](https://www.youtube.com/watch?v=ORTR0sKP8P4)
+
+---
+
+### Dashboard Overview
+
+A quick presentation of the HTML dashboard that visualizes `metrics.json`  
+and allows interactive exploration of collected data.
+ 
+[Watch demo](https://www.youtube.com/watch?v=IcNMjsw-c2E) 
+
+---
+
+## Dashboard
+
+Starting with version 1.1, the project includes a lightweight HTML dashboard  
+for visualizing collected metrics.
+
+The dashboard is fully client-side and requires no backend.
+
+---
+
 ## Time Handling
 
 - **`CLOCK_MONOTONIC`** is used internally for all delta and rate calculations  
@@ -326,6 +355,7 @@ For full validation, use the root build scripts.
 │ │ 	└── uthash.h
 │ └── CMakeLists.txt
 │
+├── dashboard/ # client side HTML dashboard 
 ├── tests/ # Test suites
 │ ├── unit/ # Unit tests
 │ └── integration/ # Integration tests
@@ -333,6 +363,25 @@ For full validation, use the root build scripts.
 ├── make.sh # Main build script
 ├── makeAll.sh # Clean + full rebuild script
 ```
+
+---
+
+### Features
+
+- Interactive charts for all aggregated metrics
+- Per-process info box (PID, threads, records)
+- Click on any bar to jump to detailed timeline view
+- Records page for `.jsonl` exploration by PID and metric
+- Remembers last loaded file in browser storage
+
+### How to Use
+
+1. Run `process_analyzer` normally
+2. Open `dashboard/index.html` in your browser
+3. Upload the generated `metrics.json`
+4. Optionally open `records.html` for timeline exploration
+
+No installation required — just open the HTML file locally.
 
 ---
 
@@ -349,7 +398,6 @@ Tests can be enabled using:
 ./make.sh -includeUnitTests -includeIntegrationTests
 # or
 ./makeAll.sh -includeUnitTests -includeIntegrationTests
-th scripts support the following optional paramet
 ```
 
 ## Limitations & Notes

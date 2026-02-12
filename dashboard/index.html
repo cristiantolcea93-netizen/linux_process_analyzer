@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Process Analyzer Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: #f8f9fa;
+}
+
+.section {
+    margin-top: 30px;
+}
+
+.meta-box {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+.chart-container {
+    width: 45%;
+    display: inline-block;
+    margin: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+th, td {
+    padding: 8px;
+    border: 1px solid #ddd;
+    text-align: center;
+}
+
+th {
+    background: #eee;
+}
+
+.header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.nav-btn:hover {
+    background-color: #0056b3;
+}
+
+#processInfo {
+    position: sticky;
+    top: 10px;
+	border-left: 4px solid #007bff;
+}
+
+
+
+</style>
+</head>
+
+<body>
+
+<div class="header-bar">
+	<h1>📊 Process Analyzer Report</h1>
+	<button class="nav-btn" onclick="window.open('records.html','_blank')">
+	View Records Timeline
+	</button>
+</div>
+
+<div class="section">
+    <input type="file" id="fileInput" accept=".json">
+</div>
+
+<div class="section meta-box" id="meta"></div>
+<div class="section meta-box" id="processInfo" style="display:none;"></div>
+
+<div class="section">
+    <div class="chart-container">
+        <canvas id="cpuChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="rssChart"></canvas>
+    </div>
+</div>
+
+<div class="section">
+	<div class="chart-container">
+	    <canvas id="rssIncreaseChart"></canvas>
+	</div>
+	<div class="chart-container">
+	    <canvas id="rssDeltaChart"></canvas>
+	</div>
+</div>
+
+<div class="section">
+	<div class="chart-container">
+	    <canvas id="kbytesReadChart"></canvas>
+	</div>
+	<div class="chart-container">
+	    <canvas id="kbytesWrittenChart"></canvas>
+	</div>
+</div>	
+
+<div class="section">
+    <div class="chart-container">
+        <canvas id="readRateChart"></canvas>
+    </div>
+	
+	<div class="chart-container">
+	   <canvas id="writeRateChart"></canvas>
+	</div>
+</div>
+
+<script>
+let cpuChart, rssChart, readRateChart, writeRateChart;
+let rssIncreaseChart, rssDeltaChart, kbytesReadChart, kbytesWrittenChart;
+
+
+document.getElementById("fileInput")
+    .addEventListener("change", loadFile);
+	
+function showProcessInfo(process) {
+	const box = document.getElementById("processInfo");
+
+	box.style.display = "block";
+	box.innerHTML = `
+	<b>Process:</b> ${process.comm}<br>
+	<b>PID:</b> ${process.pid}<br>
+	<b>Threads:</b> ${process.threads}<br>
+	<b>Records:</b> ${process.records}
+	`;
+	}
+
+
+function loadFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = function(ev) {
+        const json = JSON.parse(ev.target.result);
+        renderDashboard(json);
+		localStorage.setItem("lastMetrics", ev.target.result);
+    };
+
+    reader.readAsText(file);
+}
+
+function renderDashboard(data) {
+    renderMeta(data.meta);
+    renderCPU(data.metrics.cpu_average || []);
+    renderRSS(data.metrics.rss_average || []);
+    renderReadRate(data.metrics.read_rate || []);
+	renderWriteRate(data.metrics.write_rate || []);
+	renderRSSIncrease(data.metrics.rss_increase || []);
+	renderRSSDelta(data.metrics.rss_delta || []);
+	renderKbytesRead(data.metrics.kbytes_read || []);
+	renderKbytesWritten(data.metrics.written_kbytes || []);
+}
+
+function renderMeta(meta) {
+    const el = document.getElementById("meta");
+
+    el.innerHTML = `
+        <b>Host:</b> ${meta.hostname}<br>
+        <b>Interval:</b> ${meta.interval_ms} ms<br>
+        <b>Duration:</b> ${meta.duration_sec} s<br>
+        <b>Snapshots:</b> ${meta.snapshots}<br>
+        <b>Start:</b> ${meta.start_time}<br>
+        <b>End:</b> ${meta.end_time}
+    `;
+}
+
+function renderCPU(list) {
+	if (list.length === 0) return;
+    const labels = list.map(p => p.comm);
+    const values = list.map(p => p.cpu_avg_pct);
+
+    if (cpuChart) cpuChart.destroy();
+
+	cpuChart = new Chart(
+	    document.getElementById("cpuChart"),
+	    {
+	        type: "bar",
+	        data: {
+	            labels,
+	            datasets: [{
+	                label: "CPU %",
+	                data: values,
+	                backgroundColor: "#007bff"
+	            },
+			]
+	        },
+			options: buildChartOptions(list)
+	    }
+	);
+
+}
+
+function renderRSS(list) {
+	if (list.length === 0) return;
+    const labels = list.map(p => p.comm);
+    const values = list.map(p => p.rss_avg_kb / 1024);
+
+    if (rssChart) rssChart.destroy();
+
+    rssChart = new Chart(
+        document.getElementById("rssChart"),
+        {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "RSS (MB)",
+                    data: values,
+                    backgroundColor: "#28a745"
+                }]
+            },
+			options: buildChartOptions(list)
+		}
+	);
+}
+
+function renderReadRate(readList) {
+	if (readList.length ==0) return;
+    const labels = readList.map(p => p.comm);
+
+    const read = readList.map(p => p.read_rate_kbps);
+
+    if (readRateChart) readRateChart.destroy();
+
+    readRateChart = new Chart(
+        document.getElementById("readRateChart"),
+        {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "Read KB/s",
+                        data: read,
+                        backgroundColor: "#ffc107"
+                    }
+                ]
+            },
+			options: buildChartOptions(readList)
+
+		}
+	);
+}
+
+function renderWriteRate(writeList) {
+	if (writeList.length ==0) return;
+    const labels = writeList.map(p => p.comm);
+
+    const write = writeList.map(p => p.write_rate_kbps);
+
+    if (writeRateChart) writeRateChart.destroy();
+
+    writeRateChart = new Chart(
+        document.getElementById("writeRateChart"),
+        {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "Write KB/s",
+                        data: write,
+                        backgroundColor: "#FF00FF"
+                    }
+                ]
+            },
+			options: buildChartOptions(writeList)
+		}
+	);
+}
+
+function renderRSSIncrease(list) {
+    if (list.length === 0) return;
+
+    const labels = list.map(p => p.comm);
+    const values = list.map(p => p.rss_incr_kb / 1024);
+
+    if (rssIncreaseChart) rssIncreaseChart.destroy();
+
+    rssIncreaseChart = new Chart(
+        document.getElementById("rssIncreaseChart"),
+        {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "RSS Increase (MB)",
+                    data: values,
+                    backgroundColor: "#17a2b8"
+                }]
+            },
+			options: buildChartOptions(list)
+		}
+	);
+}
+
+function renderRSSDelta(list) {
+    if (list.length === 0) return;
+
+    const labels = list.map(p => p.comm);
+    const values = list.map(p => p.rss_delta_kb / 1024);
+
+    if (rssDeltaChart) rssDeltaChart.destroy();
+
+    rssDeltaChart = new Chart(
+        document.getElementById("rssDeltaChart"),
+        {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "RSS Delta (MB)",
+                    data: values,
+                    backgroundColor: "#dc3545"
+                }]
+            },
+			options: buildChartOptions(list)
+
+		}
+	);
+}
+   
+function renderKbytesRead(list) {
+    if (list.length === 0) return;
+
+    const labels = list.map(p => p.comm);
+    const values = list.map(p => p.bytes_read_kb);
+
+    if (kbytesReadChart) kbytesReadChart.destroy();
+
+    kbytesReadChart = new Chart(
+        document.getElementById("kbytesReadChart"),
+        {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Disk Read (KB)",
+                    data: values,
+                    backgroundColor: "#6f42c1"
+                }]
+            },
+			options: buildChartOptions(list)
+		}
+	);
+}
+
+function renderKbytesWritten(list) {
+    if (list.length === 0) return;
+
+    const labels = list.map(p => p.comm);
+    const values = list.map(p => p.written_bytes_kb);
+
+    if (kbytesWrittenChart) kbytesWrittenChart.destroy();
+
+    kbytesWrittenChart = new Chart(
+        document.getElementById("kbytesWrittenChart"),
+        {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Disk Write (KB)",
+                    data: values,
+                    backgroundColor: "#fd7e14"
+                }]
+            },
+			options: buildChartOptions(list)
+		}
+	);
+}
+
+function chartClickHandler(list) {
+    return (evt, elements) => {
+        if (!elements.length) return;
+
+        const index = elements[0].index;
+        const process = list[index];
+
+        showProcessInfo(process);
+
+        window.open(`records.html?pid=${process.pid}`, "_blank");
+    };
+}
+
+function buildChartOptions(list) {
+    return {
+        interaction: {
+            mode: 'nearest',
+            intersect: true
+        },
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const index = context.dataIndex;
+                        const process = list[index];
+
+                        return [
+                            `PID: ${process.pid}`,
+							`Records: ${process.records}`,
+							`Threads: ${process.threads}`,
+                            `${context.dataset.label}: ${context.raw}`
+                        ];
+                    }
+                }
+            }
+        },
+        onClick: chartClickHandler(list)
+    };
+}
+
+
+window.addEventListener("load", () => {
+    const saved = localStorage.getItem("lastMetrics");
+    if (saved) {
+        try {
+            const json = JSON.parse(saved);
+            renderDashboard(json);
+        } catch {}
+    }
+});
+
+
+</script>
+
+</body>
+</html>

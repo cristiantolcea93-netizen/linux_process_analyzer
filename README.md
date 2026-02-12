@@ -60,7 +60,7 @@ At the end of execution (or when interrupted), the requested metrics are calcula
 A short walkthrough of `process_analyzer` running from the command line,  
 including sampling, metrics generation, and output files.
 
-[Watch demo](https://www.youtube.com/watch?v=ORTR0sKP8P4)
+[Watch demo](https://youtu.be/ORTR0sKP8P4)
 
 ---
 
@@ -69,7 +69,7 @@ including sampling, metrics generation, and output files.
 A quick presentation of the HTML dashboard that visualizes `metrics.json`  
 and allows interactive exploration of collected data.
  
-[Watch demo](https://www.youtube.com/watch?v=IcNMjsw-c2E ) 
+[Watch demo](https://youtu.be/IcNMjsw-c2E ) 
 
 ---
 

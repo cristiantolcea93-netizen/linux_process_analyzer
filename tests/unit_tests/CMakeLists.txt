@@ -47,8 +47,15 @@ add_test(
     COMMAND test_config
 )
 
+# add ZLIB for log compression
+find_package(ZLIB REQUIRED)
+
 add_executable(test_process_snapshot
     test_process_snapshot.c
+)
+
+target_link_libraries(test_process_snapshot
+    ZLIB::ZLIB
 )
 
 target_include_directories(test_process_snapshot PRIVATE

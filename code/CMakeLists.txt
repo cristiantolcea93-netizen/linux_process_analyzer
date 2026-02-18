@@ -14,6 +14,14 @@ add_executable(${PROJECT_NAME}
     config/config.c
 )
 
+# add ZLIB for log compression
+find_package(ZLIB REQUIRED)
+
+target_link_libraries(process_analyzer
+    ZLIB::ZLIB
+)
+
+
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 # header include path

@@ -23,7 +23,8 @@ jobs:
             ninja-build \
             jq \
             stress-ng \
-            build-essential
+            build-essential \
+            zlib1g-dev
 
       - name: Make scripts executable
         run: |

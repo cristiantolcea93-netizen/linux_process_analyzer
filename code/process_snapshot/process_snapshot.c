@@ -19,6 +19,7 @@
 #include "process_snapshot.h"
 #include "process_stats.h"
 #include "config.h"
+#include "compression_worker.h"
 
 #define PROC_PATH "/proc"
 
@@ -38,7 +39,6 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
 static off_t get_file_size(const char *path);
 static void rotate_logs(char* filePath);
 static void rotate_and_reopen(FILE **pf, const char *path);
-static int compress_file_gzip(const char *src, const char *dst);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
 static void write_output_to_json(process_state_input_t* input);
@@ -83,52 +83,33 @@ static off_t get_file_size(const char *path)
 
 static void rotate_logs(char* filePath)
 {
-    char old_path[256];
-    char new_path[256];
-    char gz_path[256];
+    char old_path[PATH_MAX], new_path[PATH_MAX];
 
     int max_rotations = config_get_max_number_of_files();
-
-    /* remove the oldest compressed log */
+    // remove the oldest log entry
     snprintf(old_path, sizeof(old_path),
              "%s.%d.gz", filePath, max_rotations);
     unlink(old_path);
 
-    /* shift existing rotations: .N.gz -> .N+1.gz */
+    // rename .N-1 -> .N
     for (int i = max_rotations - 1; i >= 1; i--) {
-
         snprintf(old_path, sizeof(old_path),
                  "%s.%d.gz", filePath, i);
-
         snprintf(new_path, sizeof(new_path),
                  "%s.%d.gz", filePath, i + 1);
 
         rename(old_path, new_path);
     }
 
-    /* rename current file -> .1 */
+    // current log -> .1
     snprintf(old_path, sizeof(old_path),
              "%s", filePath);
-
     snprintf(new_path, sizeof(new_path),
              "%s.1", filePath);
+    rename(old_path, new_path);
 
-    if (rename(old_path, new_path) != 0) {
-        perror("rename");
-        return;
-    }
-
-    /* compress .1 -> .1.gz */
-    snprintf(gz_path, sizeof(gz_path),
-             "%s.1.gz", filePath);
-
-    if (compress_file_gzip(new_path, gz_path) == 0) {
-        unlink(new_path);  /* remove uncompressed file */
-    } else {
-        fprintf(stderr, "Compression failed for %s\n", new_path);
-    }
+    compression_enqueue_file(new_path);
 }
-
 
 static void rotate_and_reopen(FILE **pf, const char *path)
 {
@@ -147,83 +128,6 @@ static void rotate_and_reopen(FILE **pf, const char *path)
        fprintf(stderr,"fopen failed after rotate on %s", path);
     }
 }
-
-static int compress_file_gzip(const char *src, const char *dst)
-{
-    FILE *in = NULL;
-    gzFile out = NULL;
-    unsigned char *buffer = NULL;
-    int ret = -1;
-
-    in = fopen(src, "rb");
-    if (!in)
-    {
-        fprintf(stderr,"compress_file_gzip: failed to open src\n");
-        goto cleanup;
-    }
-
-    /* "wb" = write binary, default compression level */
-    out = gzopen(dst, "wb");
-    if (!out)
-    {
-    	fprintf(stderr,"compress_file_gzip: failed to open dst\n");
-        goto cleanup;
-    }
-
-    buffer = malloc(COMPRESS_BUFFER_SIZE);
-    if (!buffer)
-    {
-    	fprintf(stderr, "compress_file_gzip: failed to allocate compression buffer\n");
-        goto cleanup;
-    }
-
-    while (1)
-    {
-
-        size_t read_bytes = fread(buffer, 1, COMPRESS_BUFFER_SIZE, in);
-
-        if (read_bytes > 0)
-        {
-            int written = gzwrite(out, buffer, (unsigned int)read_bytes);
-
-            if (written == 0)
-            {
-                int err_no = 0;
-                const char *msg = gzerror(out, &err_no);
-                fprintf(stderr, "compress_file_gzip: gzwrite error: %s\n", msg);
-                goto cleanup;
-            }
-        }
-
-        if (read_bytes < COMPRESS_BUFFER_SIZE)
-        {
-            if (feof(in))
-                break;
-
-            if (ferror(in))
-            {
-            	fprintf(stderr, "compress_file_gzip:read error\n");
-                goto cleanup;
-            }
-        }
-    }
-
-    ret = 0;
-
-cleanup:
-
-    if (buffer)
-        free(buffer);
-
-    if (in)
-        fclose(in);
-
-    if (out)
-        gzclose(out);
-
-    return ret;
-}
-
 
 static void log_data(FILE* file, const char* fmt, ...)
 {

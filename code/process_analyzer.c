@@ -10,6 +10,8 @@
 #include "args_parser.h"
 #include "process_stats.h"
 #include "config.h"
+#include "compression_worker.h"
+
 
 
 static int getTimeFd(uint64_t interval_ms);
@@ -99,6 +101,10 @@ int main(int argc, char **argv)
 				//failed to initialize process snapshot
 				return -1;
 			}
+
+			//todo init compression only if enabled in configuration
+			compression_worker_init();
+
 			int tfd = getTimeFd(gArguments.interval_ms);
 			if(tfd != -1)
 			{
@@ -137,6 +143,8 @@ int main(int argc, char **argv)
 				}
 				//deinit snapshot
 				process_snapshot_deinit();
+				//stop compression worker
+				compression_worker_shutdown();
 				//print end of execution metrics
 				process_stats_print_metrics(&(gArguments.end_metrics_args),gArguments.interval_ms);
 			}

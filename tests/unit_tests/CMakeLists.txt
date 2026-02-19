@@ -52,6 +52,7 @@ find_package(ZLIB REQUIRED)
 
 add_executable(test_process_snapshot
     test_process_snapshot.c
+    ../../code/compression/compression_worker.c
 )
 
 target_link_libraries(test_process_snapshot
@@ -63,6 +64,7 @@ target_include_directories(test_process_snapshot PRIVATE
     ../../code/process_stats
     ../../code/config
     ../../code/args_parser
+    ../../code/compression
     unity/src
 )
 

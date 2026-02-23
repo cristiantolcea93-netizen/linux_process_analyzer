@@ -50,6 +50,11 @@ bool config_get_include_self(void)
     return false;
 }
 
+bool config_get_compression_enabled(void)
+{
+	return false;
+}
+
 // ---- MOCK PROCESS STATS ----
 
 void process_stats_update(process_state_input_t* input)

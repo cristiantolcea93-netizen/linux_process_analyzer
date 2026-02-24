@@ -47,7 +47,7 @@ static const config_t config_default =
     .raw_console_enabled = false,
 
 	/*compression*/
-	.compression_enabled = true,
+	.compression_enabled = false,
 
     /* metrics */
     .metrics_console_enabled = true,

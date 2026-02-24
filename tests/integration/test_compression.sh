@@ -52,7 +52,8 @@ $BIN \
 
 unset PROCESS_ANALYZER_CONFIG
 
-COUNT=$(ls "$TEST_ROOT"/ptime.log*.gz | wc -l)
+
+COUNT=$(ls "$TEST_ROOT"/ptime.log*.gz 2>/dev/null | wc -l)
 
 if [ "$COUNT" -gt 3 ]; then
     echo "Too many rotated .gz log files: $COUNT"
@@ -62,7 +63,7 @@ elif [ "$COUNT" -lt 1 ]; then
     exit 1
 fi
 
-COUNT_JSONL=$(ls "$TEST_ROOT"/ptime.jsonl*.gz | wc -l)
+COUNT_JSONL=$(ls "$TEST_ROOT"/ptime.jsonl*.gz 2>/dev/null | wc -l)
 
 if [ "$COUNT_JSONL" -gt 3 ]; then
     echo "Too many rotated .gz jsonl files: $COUNT_JSONL"

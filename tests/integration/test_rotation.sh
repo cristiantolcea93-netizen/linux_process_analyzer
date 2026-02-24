@@ -52,7 +52,7 @@ $BIN \
 
 unset PROCESS_ANALYZER_CONFIG
 
-COUNT=$(ls "$TEST_ROOT"/ptime.log* | wc -l)
+COUNT=$(ls /tmp/ptime.log* | wc -l)
 
 if [ "$COUNT" -gt 3 ]; then
     echo "Too many rotated files: $COUNT"

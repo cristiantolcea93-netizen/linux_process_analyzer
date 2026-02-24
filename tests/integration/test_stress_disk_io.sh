@@ -22,6 +22,9 @@ stress-ng \
 
 STRESS_PID=$!
 
+# let stress-ng run for 1 second before starting the analyzer
+sleep 1
+
 # Run analyzer
 $BIN \
   -i 100ms \

@@ -121,6 +121,9 @@ raw_log_enabled=true
 raw_jsonl_enabled=true
 raw_console_enabled=false
 
+#.log / .jsonl data compression
+compression_enabled=false
+
 # Metrics output
 metrics_on_console=true
 metrics_on_json=true
@@ -143,6 +146,7 @@ include_self=false
 | `raw_log_enabled`   | bool    | `true`       | Enable `.log` snapshot files |
 | `raw_jsonl_enabled` | bool    | `true`       | Enable `.jsonl` snapshot files |
 | `raw_console_enabled` | bool | `false`      | Print raw snapshots to console |
+| `compression_enabled` | bool | `false` 	 | Enable gzip compression for rotated raw logs |
 | `metrics_on_console`| bool    | `true`       | Print aggregated metrics |
 | `metrics_on_json`   | bool    | `true`       | Generate `metrics.json` |
 | `max_file_size`     | size    | `5m`         | Max size per rotated file |
@@ -253,6 +257,77 @@ Rotation settings are configurable via the config file.
 
 ---
 
+## Compression
+
+Starting with version 1.2, the tool supports optional gzip compression for rotated snapshot logs.
+
+Compression is designed to run **asynchronously** and does not block the sampling loop.
+
+### How It Works
+
+When log rotation occurs:
+
+1. The active log file is renamed to a rotated filename.
+2. A compression job is queued.
+3. A background worker thread compresses the file using gzip.
+4. The compressed file replaces the rotated file.
+5. The original uncompressed file is removed.
+
+This design guarantees:
+
+- Minimal impact on sampling performance
+- No blocking I/O in the main thread
+- Safe operation even under frequent rotations
+
+### File Naming
+
+During rotation with compression enabled:
+ptime.jsonl → active file
+ptime.jsonl.1.gz → most recent rotated file
+ptime.jsonl.2.gz → older files
+...
+
+Temporary filenames may briefly appear during compression but are automatically cleaned up.
+
+### Configuration
+
+Compression is controlled via:
+
+```
+compression_enabled=true
+```
+
+If compression is disabled:
+
+- Rotated files remain uncompressed
+- No worker thread is created
+- No additional CPU overhead occurs
+
+### Performance impact
+
+Compression runs in a dedicated worker thread.
+
+Typical overhead:
+- ~1% additional CPU at very high sampling rates (≈15 ms interval, 100 mb file size)
+- Negligible impact at ≥100 ms intervals
+
+### Implementation details
+
+The compression subsystem is implemented in:
+
+code/compression/
+    compression_worker.c
+    compression_worker.h
+
+Key characteristics:
+- Thread-safe job queue
+- Condition-variable based worker wakeup
+- Graceful shutdown support
+- Failure-safe file handling
+- Uses zlib (gzopen, gzwrite)
+
+---
+
 ## Performance & Benchmark
 
 Tests were performed on:
@@ -271,10 +346,10 @@ Tests were performed on:
 
 Notes:
 
-- The analyzer is single-threaded
 - At very small intervals (<20ms), one CPU core may reach near 100%
 - For long-running monitoring, intervals ≥100ms are recommended
-
+- With compression enabled, CPU usage increases by approximately ~1% at very small sampling intervals (≈15 ms).  
+- At typical monitoring intervals (≥100 ms), the compression impact is negligible.
 ---
 
 ## Build Instructions
@@ -344,6 +419,9 @@ For full validation, use the root build scripts.
 │ ├── config/
 │ │ ├── config.c
 │ │ └── config.h
+│ ├── compression/
+│ │ ├── compression_worker.c
+│ │ └── compression_worker.h
 │ ├── process_snapshot/
 │ │ ├── process_snapshot.c
 │ │ └── process_snapshot.h

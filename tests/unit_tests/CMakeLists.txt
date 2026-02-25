@@ -136,3 +136,28 @@ add_test(
     COMMAND test_args_parser
 )
 
+# ------------------------
+# Compression test
+# ------------------------
+add_executable(test_compression
+    test_compression.c
+    ../../code/config/config.c
+)
+
+target_include_directories(test_compression PRIVATE
+    ../../code/config
+    ../../code/compression
+    unity/src
+)
+
+target_link_libraries(test_compression
+    unity
+    ZLIB::ZLIB
+    pthread
+)
+
+add_test(
+    NAME test_compression
+    COMMAND test_compression
+)
+

@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include "process_stats.h"
 
-#define PROCESS_ANALYZER_VERSION	"process_analyzer V1.1"
+#define PROCESS_ANALYZER_VERSION	"process_analyzer V1.2"
 
 typedef struct {
 	uint64_t 						interval_ms;   		// snapshot interval in ms

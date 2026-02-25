@@ -4,7 +4,7 @@ set -e
 
 source "$(dirname "$0")/common.sh"
 
-echo "Test: log rotation"
+echo "Test: log compression"
 
 setup_test_dir
 
@@ -21,15 +21,15 @@ raw_jsonl_enabled=true
 #default false
 raw_console_enabled=false
 
+#compression for raw data
+#default false
+compression_enabled=true
+
 #output for metrics
 #default true
 metrics_on_console=true
 #default true
 metrics_on_json=true
-
-#compression for raw data
-#default false
-compression_enabled=false
 
 #.log and .jsonl file rotation settings 
 #default 5m
@@ -52,11 +52,26 @@ $BIN \
 
 unset PROCESS_ANALYZER_CONFIG
 
-COUNT=$(ls /tmp/ptime.log* | wc -l)
+
+COUNT=$(ls "$TEST_ROOT"/ptime.log*.gz 2>/dev/null | wc -l)
 
 if [ "$COUNT" -gt 3 ]; then
-    echo "Too many rotated files: $COUNT"
+    echo "Too many rotated .gz log files: $COUNT"
+    exit 1
+elif [ "$COUNT" -lt 1 ]; then
+    echo "Not enough rotated .gz log files: $COUNT"
     exit 1
 fi
 
-echo "Rotation OK"
+COUNT_JSONL=$(ls "$TEST_ROOT"/ptime.jsonl*.gz 2>/dev/null | wc -l)
+
+if [ "$COUNT_JSONL" -gt 3 ]; then
+    echo "Too many rotated .gz jsonl files: $COUNT_JSONL"
+    exit 1
+elif [ "$COUNT_JSONL" -lt 1 ]; then
+    echo "Not enough rotated .gz jsonl files: $COUNT_JSONL"
+    exit 1
+fi
+
+
+echo "Compression OK"

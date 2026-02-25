@@ -21,6 +21,8 @@ typedef struct
     bool raw_jsonl_enabled;
     bool raw_console_enabled;
 
+    bool compression_enabled;
+
     bool metrics_console_enabled;
     bool metrics_json_enabled;
 
@@ -43,6 +45,9 @@ static const config_t config_default =
     .raw_log_enabled     = true,
     .raw_jsonl_enabled   = true,
     .raw_console_enabled = false,
+
+	/*compression*/
+	.compression_enabled = false,
 
     /* metrics */
     .metrics_console_enabled = true,
@@ -223,6 +228,9 @@ static int config_set_option(const char* key,const char* value)
 
     if (!strcmp(key, "raw_console_enabled"))
         return parse_bool(value, &configuration_t.raw_console_enabled);
+
+    if (!strcmp(key, "compression_enabled"))
+        return parse_bool(value, &configuration_t.compression_enabled);
 
     if (!strcmp(key, "metrics_on_console"))
         return parse_bool(value, &configuration_t.metrics_console_enabled);
@@ -415,6 +423,10 @@ void config_print_banner(void)
     printf("   console              : %s\n", truefalse(configuration_t.raw_console_enabled));
     printf("\n");
 
+    printf(" Compression:\n");
+    printf("   compression enabled  : %s\n", truefalse(configuration_t.compression_enabled));
+    printf("\n");
+
     printf(" Metrics output:\n");
     printf("   console              : %s\n", truefalse(configuration_t.metrics_console_enabled));
     printf("   metrics.json         : %s\n", truefalse(configuration_t.metrics_json_enabled));
@@ -429,7 +441,7 @@ void config_print_banner(void)
     printf("\n");
 
     printf(" General options\n");
-    printf("   include_self          : %s\n",truefalse(configuration_t.include_self));
+    printf("   include self          : %s\n",truefalse(configuration_t.include_self));
 
     printf("=================================================\n\n");
 }
@@ -499,4 +511,9 @@ bool config_get_metrics_json_enabled(void)
 bool config_get_include_self(void)
 {
 	return configuration_t.include_self;
+}
+
+bool config_get_compression_enabled(void)
+{
+	return configuration_t.compression_enabled;
 }

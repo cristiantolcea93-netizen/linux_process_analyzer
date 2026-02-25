@@ -12,7 +12,17 @@ add_executable(${PROJECT_NAME}
     args_parser/args_parser.c
     process_stats/process_stats.c
     config/config.c
+    compression/compression_worker.c
 )
+
+# add ZLIB for log compression
+find_package(ZLIB REQUIRED)
+
+target_link_libraries(process_analyzer
+    ZLIB::ZLIB
+    pthread
+)
+
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
@@ -23,6 +33,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/process_stats"
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/uthash"
     "${CMAKE_CURRENT_SOURCE_DIR}/config"
+    "${CMAKE_CURRENT_SOURCE_DIR}/compression"
 )
 
 set_target_properties(${PROJECT_NAME}

@@ -47,8 +47,16 @@ add_test(
     COMMAND test_config
 )
 
+# add ZLIB for log compression
+find_package(ZLIB REQUIRED)
+
 add_executable(test_process_snapshot
     test_process_snapshot.c
+    ../../code/compression/compression_worker.c
+)
+
+target_link_libraries(test_process_snapshot
+    ZLIB::ZLIB
 )
 
 target_include_directories(test_process_snapshot PRIVATE
@@ -56,6 +64,7 @@ target_include_directories(test_process_snapshot PRIVATE
     ../../code/process_stats
     ../../code/config
     ../../code/args_parser
+    ../../code/compression
     unity/src
 )
 
@@ -125,5 +134,30 @@ target_link_libraries(test_args_parser
 add_test(
     NAME test_args_parser
     COMMAND test_args_parser
+)
+
+# ------------------------
+# Compression test
+# ------------------------
+add_executable(test_compression
+    test_compression.c
+    ../../code/config/config.c
+)
+
+target_include_directories(test_compression PRIVATE
+    ../../code/config
+    ../../code/compression
+    unity/src
+)
+
+target_link_libraries(test_compression
+    unity
+    ZLIB::ZLIB
+    pthread
+)
+
+add_test(
+    NAME test_compression
+    COMMAND test_compression
 )
 

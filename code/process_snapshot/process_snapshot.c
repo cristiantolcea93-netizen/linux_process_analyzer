@@ -13,13 +13,17 @@
 #include <sys/file.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <zlib.h>
+
 
 #include "process_snapshot.h"
 #include "process_stats.h"
 #include "config.h"
+#include "compression_worker.h"
 
 #define PROC_PATH "/proc"
 
+#define COMPRESS_BUFFER_SIZE 65536   /* 64 KB */
 
 
 
@@ -79,29 +83,77 @@ static off_t get_file_size(const char *path)
 
 static void rotate_logs(char* filePath)
 {
-    char old_path[256], new_path[256];
+    char old_path[PATH_MAX], new_path[PATH_MAX];
+    bool compression_enabled = config_get_compression_enabled();
+    static uint32_t rotation_counter=0;
 
     int max_rotations = config_get_max_number_of_files();
-    // remove the oldest log entry
-    snprintf(old_path, sizeof(old_path),
-             "%s.%d", filePath, max_rotations);
+
+    // remove oldest (try both)
+    snprintf(old_path, sizeof(old_path), "%s.%d.gz", filePath, max_rotations);
     unlink(old_path);
 
-    // rename .N-1 -> .N
-    for (int i = max_rotations - 1; i >= 1; i--) {
-        snprintf(old_path, sizeof(old_path),
-                 "%s.%d", filePath, i);
-        snprintf(new_path, sizeof(new_path),
-                 "%s.%d", filePath, i + 1);
-        rename(old_path, new_path);
+    snprintf(old_path, sizeof(old_path), "%s.%d", filePath, max_rotations);
+    unlink(old_path);
+
+    for (int i = max_rotations - 1; i >= 1; i--)
+    {
+        int ret;
+
+        if (compression_enabled)
+        {
+            snprintf(old_path, sizeof(old_path), "%s.%d.gz", filePath, i);
+            snprintf(new_path, sizeof(new_path), "%s.%d.gz", filePath, i + 1);
+
+            ret = rename(old_path, new_path);
+
+            if (ret != 0 && errno != ENOENT)
+            {
+                fprintf(stderr,
+                        "rotate rename failed (gz), trying fallback %s -> %s\n",
+                        old_path, new_path);
+            }
+
+            if (ret == 0)
+                continue;
+        }
+
+        // fallback or non-compression path
+        snprintf(old_path, sizeof(old_path), "%s.%d", filePath, i);
+        snprintf(new_path, sizeof(new_path), "%s.%d", filePath, i + 1);
+
+        if (rename(old_path, new_path) != 0 && errno != ENOENT)
+        {
+            fprintf(stderr,"rotate rename failed %s -> %s\n",old_path, new_path);
+        }
     }
 
-    // current log -> .1
-    snprintf(old_path, sizeof(old_path),
-             "%s", filePath);
-    snprintf(new_path, sizeof(new_path),
-             "%s.1", filePath);
-    rename(old_path, new_path);
+    // current -> .1
+    snprintf(old_path, sizeof(old_path), "%s", filePath);
+
+    if (compression_enabled)
+    {
+    	/* filename.1.time.counter => unique name required if compression is enabled to cover the
+    	 * corner case when compression thread is slower than the second rotation and it tries to
+    	 * compress a file which was already overwritten by the thread doing the rotation
+    	 */
+        snprintf(new_path, sizeof(new_path),"%s.1.%ld.%u",filePath,time(NULL),rotation_counter);
+        rotation_counter++;
+    }
+    else
+    {
+        snprintf(new_path, sizeof(new_path),"%s.1",filePath);
+    }
+
+    if (rename(old_path, new_path) != 0 && errno != ENOENT)
+    {
+        fprintf(stderr,"rotate rename failed %s -> %s\n",old_path, new_path);
+    }
+
+    if (compression_enabled)
+    {
+        compression_enqueue_file(new_path);
+    }
 }
 
 static void rotate_and_reopen(FILE **pf, const char *path)
@@ -121,7 +173,6 @@ static void rotate_and_reopen(FILE **pf, const char *path)
        fprintf(stderr,"fopen failed after rotate on %s", path);
     }
 }
-
 
 static void log_data(FILE* file, const char* fmt, ...)
 {

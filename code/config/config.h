@@ -31,5 +31,6 @@ extern bool config_get_raw_jsonl_enabled(void);
 extern bool config_get_metrics_console_enabled(void);
 extern bool config_get_metrics_json_enabled(void);
 extern bool config_get_include_self(void);
+extern bool config_get_compression_enabled(void);
 
 #endif /* CONFIG_CONFIG_H_ */

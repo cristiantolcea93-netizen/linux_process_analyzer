@@ -146,7 +146,7 @@ include_self=false
 | `raw_log_enabled`   | bool    | `true`       | Enable `.log` snapshot files |
 | `raw_jsonl_enabled` | bool    | `true`       | Enable `.jsonl` snapshot files |
 | `raw_console_enabled` | bool | `false`      | Print raw snapshots to console |
-| `compression_enabled` | bool | `false` 	 | Enable gzip compression for rotated raw logs |
+| `compression_enabled` | bool | `false` | Enable gzip compression for rotated raw logs |
 | `metrics_on_console`| bool    | `true`       | Print aggregated metrics |
 | `metrics_on_json`   | bool    | `true`       | Generate `metrics.json` |
 | `max_file_size`     | size    | `5m`         | Max size per rotated file |
@@ -249,14 +249,6 @@ Rotation settings are configurable via the config file.
 
 ---
 
-## JSON Output
-
-- `metrics.json` follows a versioned schema
-- Schema documentation: [SCHEMA.md](SCHEMA.md)
-- Snapshot data uses JSON Lines format (`.jsonl`)
-
----
-
 ## Compression
 
 Starting with version 1.2, the tool supports optional gzip compression for rotated snapshot logs.
@@ -282,12 +274,16 @@ This design guarantees:
 ### File Naming
 
 During rotation with compression enabled:
+
+```
 ptime.jsonl → active file
 ptime.jsonl.1.gz → most recent rotated file
 ptime.jsonl.2.gz → older files
+```
+
 ...
 
-Temporary filenames may briefly appear during compression but are automatically cleaned up.
+Temporary filenames may briefly appear during compression but are automatically cleaned up afterward.
 
 ### Configuration
 
@@ -308,16 +304,18 @@ If compression is disabled:
 Compression runs in a dedicated worker thread.
 
 Typical overhead:
-- ~1% additional CPU at very high sampling rates (≈15 ms interval, 100 mb file size)
+- ~1% additional CPU at very high sampling rates (≈15 ms interval, 100 MB file size)
 - Negligible impact at ≥100 ms intervals
 
 ### Implementation details
 
 The compression subsystem is implemented in:
 
+```
 code/compression/
     compression_worker.c
     compression_worker.h
+```
 
 Key characteristics:
 - Thread-safe job queue
@@ -325,6 +323,14 @@ Key characteristics:
 - Graceful shutdown support
 - Failure-safe file handling
 - Uses zlib (gzopen, gzwrite)
+
+---
+
+## JSON Output
+
+- `metrics.json` follows a versioned schema
+- Schema documentation: [SCHEMA.md](SCHEMA.md)
+- Snapshot data uses JSON Lines format (`.jsonl`)
 
 ---
 

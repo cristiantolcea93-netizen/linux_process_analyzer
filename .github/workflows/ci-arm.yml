@@ -1,0 +1,50 @@
+name: CI - ARM Build & Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-test-arm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Enable QEMU for ARM emulation
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      # Run build + tests inside ARM container
+      - name: Build and test (ARM64)
+        run: |
+          docker run --rm \
+            --platform linux/arm64 \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            arm64v8/ubuntu:22.04 \
+            bash -c "
+              apt-get update &&
+              apt-get install -y \
+                cmake \
+                ninja-build \
+                jq \
+                stress-ng \
+                build-essential \
+                zlib1g-dev &&
+              
+              chmod +x makeAll.sh &&
+              chmod +x make.sh &&
+
+              ./makeAll.sh -includeUnitTests -includeIntegrationTests
+            "
+
+      # Upload binary artifact
+      - name: Upload ARM binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: process_analyzer-arm64
+          path: |
+            build/bin/process_analyzer

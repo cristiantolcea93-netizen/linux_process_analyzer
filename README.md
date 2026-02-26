@@ -2,9 +2,12 @@
 
 [![CI](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml)
 
+[![Release](https://img.shields.io/github/v/release/cristiantolcea93-netizen/linux_process_analyzer)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/releases)
+
 `process_analyzer` is a lightweight Linux command-line tool written in C that periodically samples process information from `/proc` and provides aggregated statistics at the end of execution.
 
-The tool is designed for **low-overhead monitoring**, accurate **time-based calculations**, and **post-run analysis** of CPU, memory (RSS), and disk I/O usage per process.
+The tool is designed for **low-overhead monitoring**, accurate **time-based calculations**, and **post-run analysis** of CPU, memory (RSS), and disk I/O usage per process. 
+It focuses on **low overhead and long-term observation** rather than deep profiling.
 
 ---
 
@@ -23,6 +26,8 @@ The tool is designed for **low-overhead monitoring**, accurate **time-based calc
 - Graceful shutdown on `CTRL+C` or `SIGTERM`
 - Supports infinite runtime mode (`-n infinity`)
 - Minimal runtime dependencies (glibc, procfs)
+- Optional asynchronous gzip compression for rotated logs
+- Prebuilt binaries for Linux x86_64 and ARM64
 
 ---
 
@@ -82,15 +87,61 @@ The dashboard is fully client-side and requires no backend.
 
 ---
 
-## Time Handling
+## Installation
 
-- **`CLOCK_MONOTONIC`** is used internally for all delta and rate calculations  
-  (CPU usage, disk I/O rates, averages)
-- **`CLOCK_REALTIME`** is used only for human-readable timestamps in logs
+Prebuilt binaries are available in the [GitHub Releases section](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/releases)
 
-This guarantees stable measurements even if the system clock changes.
+Supported architectures:
+
+- Linux x86_64 (amd64)
+- Linux ARM64 (aarch64)
+
+Download the appropriate binary for your system and make it executable:
+
+```bash
+chmod +x process_analyzer
+```
+
+Then run:
+
+```bash
+./process_analyzer -h
+```
+
+### Quick Start Example
+
+```bash
+./process_analyzer \
+    -i 100ms \
+    -n 100 \
+    -c 10 -r 10 -s 10 -d 10 \
+    -e 10 -f 10 \
+    -g 10 -a 10
+```
+### Requirements
+
+Runtime requirements are minimal:
+
+- Linux with `/proc` filesystem
+- glibc
+- No additional libraries required
 
 ---
+
+### Build from source
+
+If you prefer to build manually: 
+
+```bash
+./make.sh
+```
+
+Or build with tests:
+
+```bash
+./makeAll.sh -includeUnitTests -includeIntegrationTests
+```
+See **Build Instructions** section below for more details.
 
 ## Configuration File
 
@@ -323,6 +374,16 @@ Key characteristics:
 - Graceful shutdown support
 - Failure-safe file handling
 - Uses zlib (gzopen, gzwrite)
+
+---
+
+## Time Handling
+
+- **`CLOCK_MONOTONIC`** is used internally for all delta and rate calculations  
+  (CPU usage, disk I/O rates, averages)
+- **`CLOCK_REALTIME`** is used only for human-readable timestamps in logs
+
+This guarantees stable measurements even if the system clock changes.
 
 ---
 

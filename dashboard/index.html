@@ -72,6 +72,40 @@ th {
 	border-left: 4px solid #007bff;
 }
 
+body.dark-mode {
+    background: #1a1a2e;
+    color: #eee;
+}
+
+body.dark-mode .meta-box {
+    background: #16213e;
+    box-shadow: 0 0 5px rgba(255,255,255,0.1);
+}
+
+body.dark-mode table {
+    background: #16213e;
+}
+
+body.dark-mode th, body.dark-mode td {
+    border: 1px solid #444;
+}
+
+body.dark-mode th {
+    background: #0f3460;
+}
+
+body.dark-mode #darkModeBtn {
+    background: #e94560;
+}
+
+body.dark-mode #darkModeBtn:hover {
+    background: #c73e54;
+}
+
+#fileInput {
+    display: none;
+}
+
 
 
 </style>
@@ -81,12 +115,16 @@ th {
 
 <div class="header-bar">
 	<h1>📊 Process Analyzer Report</h1>
-	<button class="nav-btn" onclick="window.open('records.html','_blank')">
-	View Records Timeline
-	</button>
+	<div>
+		<button class="nav-btn" id="darkModeBtn" onclick="toggleDarkMode()"> Dark Mode</button>
+		<button class="nav-btn" onclick="window.open('records.html','_blank')">
+		View Records Timeline
+		</button>
+	</div>
 </div>
 
 <div class="section">
+    <button class="nav-btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
     <input type="file" id="fileInput" accept=".json">
 </div>
 
@@ -153,18 +191,30 @@ function showProcessInfo(process) {
 
 
 function loadFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+    if (e && e.target.files.length > 0) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
 
-    const reader = new FileReader();
+        reader.onload = function(ev) {
+            const json = JSON.parse(ev.target.result);
+            renderDashboard(json);
+            localStorage.setItem("lastMetrics", ev.target.result);
+        };
 
-    reader.onload = function(ev) {
-        const json = JSON.parse(ev.target.result);
-        renderDashboard(json);
-		localStorage.setItem("lastMetrics", ev.target.result);
-    };
-
-    reader.readAsText(file);
+        reader.readAsText(file);
+    } else {
+        fetch("data/metrics.json")
+            .then(response => {
+                if (!response.ok) throw new Error("File not found");
+                return response.text();
+            })
+            .then(text => {
+                const json = JSON.parse(text);
+                renderDashboard(json);
+                localStorage.setItem("lastMetrics", text);
+            })
+            .catch(() => {});
+    }
 }
 
 function renderDashboard(data) {
@@ -177,6 +227,55 @@ function renderDashboard(data) {
 	renderRSSDelta(data.metrics.rss_delta || []);
 	renderKbytesRead(data.metrics.kbytes_read || []);
 	renderKbytesWritten(data.metrics.written_kbytes || []);
+}
+
+function toggleDarkMode() {
+    document.body.classList.toggle("dark-mode");
+    const isDark = document.body.classList.contains("dark-mode");
+    localStorage.setItem("darkMode", isDark ? "enabled" : "disabled");
+    document.getElementById("darkModeBtn").textContent = isDark ? "Light Mode" : "Dark Mode";
+    updateChartColors(isDark);
+}
+
+function updateChartColors(isDark) {
+    const textColor = isDark ? "#fff" : "#666";
+    const gridColor = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
+    const tooltipBg = isDark ? "#333" : "rgba(0,0,0,0.8)";
+    const charts = [cpuChart, rssChart, readRateChart, writeRateChart, rssIncreaseChart, rssDeltaChart, kbytesReadChart, kbytesWrittenChart];
+    charts.forEach(chart => {
+        if (chart) {
+            if (chart.options.scales?.x) {
+                chart.options.scales.x.ticks = { color: textColor };
+                chart.options.scales.x.grid = { color: gridColor };
+            }
+            if (chart.options.scales?.y) {
+                chart.options.scales.y.ticks = { color: textColor };
+                chart.options.scales.y.grid = { color: gridColor };
+            }
+            if (chart.options.plugins?.legend?.labels) {
+                chart.options.plugins.legend.labels.color = textColor;
+            }
+            if (chart.options.plugins?.tooltip) {
+                chart.options.plugins.tooltip.titleColor = textColor;
+                chart.options.plugins.tooltip.bodyColor = textColor;
+                chart.options.plugins.tooltip.backgroundColor = tooltipBg;
+            }
+            chart.update();
+        }
+    });
+}
+
+function isDarkMode() {
+    return document.body.classList.contains("dark-mode");
+}
+
+function loadDarkModePreference() {
+    const preference = localStorage.getItem("darkMode");
+    if (preference === "enabled") {
+        document.body.classList.add("dark-mode");
+        document.getElementById("darkModeBtn").textContent = "Light Mode";
+        setTimeout(() => updateChartColors(true), 100);
+    }
 }
 
 function renderMeta(meta) {
@@ -412,13 +511,21 @@ function chartClickHandler(list) {
 }
 
 function buildChartOptions(list) {
+    const textColor = isDarkMode() ? "#fff" : "#666";
+    const gridColor = isDarkMode() ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
     return {
         interaction: {
             mode: 'nearest',
             intersect: true
         },
         plugins: {
+            legend: {
+                labels: { color: textColor }
+            },
             tooltip: {
+                titleColor: textColor,
+                bodyColor: textColor,
+                backgroundColor: isDarkMode() ? "#333" : "rgba(0,0,0,0.8)",
                 callbacks: {
                     label: function(context) {
                         const index = context.dataIndex;
@@ -434,12 +541,23 @@ function buildChartOptions(list) {
                 }
             }
         },
+        scales: {
+            x: {
+                ticks: { color: textColor },
+                grid: { color: gridColor }
+            },
+            y: {
+                ticks: { color: textColor },
+                grid: { color: gridColor }
+            }
+        },
         onClick: chartClickHandler(list)
     };
 }
 
 
 window.addEventListener("load", () => {
+    loadDarkModePreference();
     const saved = localStorage.getItem("lastMetrics");
     if (saved) {
         try {
@@ -447,6 +565,7 @@ window.addEventListener("load", () => {
             renderDashboard(json);
         } catch {}
     }
+    loadFile();
 });
 
 

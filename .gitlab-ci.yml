@@ -7,13 +7,7 @@ build-and-test:
 
   before_script:
     - apt-get update
-    - apt-get install -y \
-        cmake \
-        ninja-build \
-        jq \
-        stress-ng \
-        build-essential \
-        zlib1g-dev
+    - apt-get install -y cmake ninja-build jq stress-ng build-essential zlib1g-dev
 
   script:
     - chmod +x makeAll.sh

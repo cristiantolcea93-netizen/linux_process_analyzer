@@ -1,6 +1,5 @@
 stages:
   - build
-  - test
 
 build-and-test:
   stage: build
@@ -8,12 +7,12 @@ build-and-test:
 
   before_script:
     - apt-get update
-    - apt-get install -y
-        cmake
-        ninja-build
-        jq
-        stress-ng
-        build-essential
+    - apt-get install -y \
+        cmake \
+        ninja-build \
+        jq \
+        stress-ng \
+        build-essential \
         zlib1g-dev
 
   script:
@@ -24,3 +23,4 @@ build-and-test:
   artifacts:
     paths:
       - build/
+

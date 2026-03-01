@@ -1,0 +1,26 @@
+stages:
+  - build
+  - test
+
+build-and-test:
+  stage: build
+  image: ubuntu:22.04
+
+  before_script:
+    - apt-get update
+    - apt-get install -y
+        cmake
+        ninja-build
+        jq
+        stress-ng
+        build-essential
+        zlib1g-dev
+
+  script:
+    - chmod +x makeAll.sh
+    - chmod +x make.sh
+    - ./makeAll.sh -includeUnitTests -includeIntegrationTests
+
+  artifacts:
+    paths:
+      - build/

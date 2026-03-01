@@ -4,6 +4,10 @@
 
 [![Release](https://img.shields.io/github/v/release/cristiantolcea93-netizen/linux_process_analyzer)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/releases)
 
+![Platform](https://img.shields.io/badge/platform-linux--x86_64%20%7C%20arm64-blue)
+
+![License](https://img.shields.io/badge/license-MIT-green)
+
 `process_analyzer` is a lightweight Linux command-line tool written in C that periodically samples process information from `/proc` and provides aggregated statistics at the end of execution.
 
 The tool is designed for **low-overhead monitoring**, accurate **time-based calculations**, and **post-run analysis** of CPU, memory (RSS), and disk I/O usage per process. 
@@ -28,6 +32,58 @@ It focuses on **low overhead and long-term observation** rather than deep profil
 - Minimal runtime dependencies (glibc, procfs)
 - Optional asynchronous gzip compression for rotated logs
 - Prebuilt binaries for Linux x86_64 and ARM64
+
+---
+
+## Demo
+
+### Screenshots
+
+#### Dashboard overview
+
+![Dashboard overview](assets/screenshots/dashboard_overview.png)
+
+#### CPU usage graph for one process (firefox)
+
+![CPU usage](assets/screenshots/firefox_cpu_time.png)
+
+#### RSS usage graph for one process (firefox)
+
+![RSS usage](assets/screenshots/firefox_rss.png)
+
+#### CLI examples
+
+Program help: 
+![help](assets/screenshots/program_help.png)
+
+Program execution: 
+![execution](assets/screenshots/program_execution.png)
+
+### Full tutorial
+
+Full tutorial, including: 
+
+- configuration file 
+- CLI options
+- Dashboard usage
+
+[Watch tutorial](https://www.youtube.com/watch?v=ChIaOgrv-lM)
+
+### CLI Usage Demo
+
+A short walkthrough of `process_analyzer` running from the command line,  
+including sampling, metrics generation, and output files.
+
+[Watch demo](https://www.youtube.com/watch?v=ORTR0sKP8P4)
+
+---
+
+### Dashboard Overview
+
+A quick presentation of the HTML dashboard that visualizes `metrics.json`  
+and allows interactive exploration of collected data.
+ 
+[Watch demo](https://www.youtube.com/watch?v=IcNMjsw-c2E) 
 
 ---
 
@@ -58,27 +114,7 @@ At the end of execution (or when interrupted), the requested metrics are calcula
 
 ---
 
-## Demo
-
-### CLI Usage Demo
-
-A short walkthrough of `process_analyzer` running from the command line,  
-including sampling, metrics generation, and output files.
-
-[Watch demo](https://www.youtube.com/watch?v=ORTR0sKP8P4)
-
----
-
-### Dashboard Overview
-
-A quick presentation of the HTML dashboard that visualizes `metrics.json`  
-and allows interactive exploration of collected data.
- 
-[Watch demo](https://www.youtube.com/watch?v=IcNMjsw-c2E) 
-
----
-
-## Dashboard
+## Dashboard features
 
 Starting with version 1.1, the project includes a lightweight HTML dashboard  
 for visualizing collected metrics.

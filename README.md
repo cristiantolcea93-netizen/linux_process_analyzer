@@ -1,12 +1,25 @@
 # Linux Process Analyzer
 
-[![CI](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml)
+[![GitHub CI](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/actions/workflows/ci.yml)
+[![GitLab CI](https://gitlab.com/cristian.tolcea93/linux_process_analyzer/-/badges/main/pipeline.svg)](https://gitlab.com/cristian.tolcea93/linux_process_analyzer/-/pipelines)
 
-[![Release](https://img.shields.io/github/v/release/cristiantolcea93-netizen/linux_process_analyzer)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/releases)
+
+[![GitHub Release](https://img.shields.io/github/v/release/cristiantolcea93-netizen/linux_process_analyzer)](https://github.com/cristiantolcea93-netizen/linux_process_analyzer/releases)
+[![GitLab Release](https://gitlab.com/cristian.tolcea93/linux_process_analyzer/-/badges/release.svg)](https://gitlab.com/cristian.tolcea93/linux_process_analyzer/-/releases)
 
 ![Platform](https://img.shields.io/badge/platform-linux--x86_64%20%7C%20arm64-blue)
 
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+> ⚠️ **Repository Mirror Notice**
+>
+> This GitLab repository is currently a mirror/backup.
+>The primary repository is hosted on GitHub:
+>
+> https://github.com/cristiantolcea93-netizen/linux_process_analyzer
+> Updates are pushed to both locations when possible.
+
+
 
 `process_analyzer` is a lightweight Linux command-line tool written in C that periodically samples process information from `/proc` and provides aggregated statistics at the end of execution.
 

@@ -29,10 +29,10 @@ sleep 1
 $BIN \
   -i 100ms \
   -n 50 \
-  -e 5 \
-  -f 5 \
-  -g 5 \
-  -a 5 \
+  -e 50 \
+  -f 50 \
+  -g 50 \
+  -a 50 \
   > "$OUT/out.txt" 2>&1
 
 kill $STRESS_PID 2>/dev/null || true
@@ -54,6 +54,7 @@ jq -e '
   ] | length > 0
 ' "$METRICS" >/dev/null || {
   echo "No write activity detected"
+  jq '.metrics.written_kbytes[:10]' "$METRICS" || true
   exit 1
 }
 
@@ -66,6 +67,7 @@ jq -e '
   ] | length > 0
 ' "$METRICS" >/dev/null || {
   echo "No read activity detected"
+  jq '.metrics.kbytes_read[:10]' "$METRICS" || true
   exit 1
 }
 
@@ -79,6 +81,7 @@ jq -e '
   ] | length > 0
 ' "$METRICS" >/dev/null || {
   echo "No read rate detected"
+  jq '.metrics.read_rate[:10]' "$METRICS" || true
   exit 1
 }
 
@@ -91,6 +94,7 @@ jq -e '
   ] | length > 0
 ' "$METRICS" >/dev/null || {
   echo "No write rate detected"
+  jq '.metrics.write_rate[:10]' "$METRICS" || true
   exit 1
 }
 

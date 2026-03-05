@@ -51,6 +51,29 @@ th, td {
 th {
     background: #eee;
 }
+
+body.dark-mode {
+    background: #1a1a2e;
+    color: #eee;
+}
+
+body.dark-mode .meta-box {
+    background: #16213e;
+    box-shadow: 0 0 5px rgba(255,255,255,0.1);
+}
+
+body.dark-mode table {
+    background: #16213e;
+}
+
+body.dark-mode th, body.dark-mode td {
+    border: 1px solid #444;
+}
+
+body.dark-mode th {
+    background: #0f3460;
+}
+
 </style>
 </head>
 
@@ -269,6 +292,28 @@ function updateChart() {
 	renderTimeline(points, label);
 }
 
+function loadDarkModePreference() {
+    const preference = localStorage.getItem("darkMode");
+    if (preference === "enabled") {
+        document.body.classList.add("dark-mode");
+    }
+}
+
+window.addEventListener("storage", function(event) {
+
+    if (event.key === "darkMode") {
+
+        if (event.newValue === "enabled") {
+            document.body.classList.add("dark-mode");
+        } else {
+            document.body.classList.remove("dark-mode");
+        }
+
+    }
+
+});
+
+document.addEventListener("DOMContentLoaded", loadDarkModePreference);
 
 </script>
 

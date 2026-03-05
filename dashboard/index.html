@@ -230,8 +230,7 @@ function renderDashboard(data) {
 }
 
 function toggleDarkMode() {
-    document.body.classList.toggle("dark-mode");
-    const isDark = document.body.classList.contains("dark-mode");
+    const isDark = document.body.classList.toggle("dark-mode");
     localStorage.setItem("darkMode", isDark ? "enabled" : "disabled");
     document.getElementById("darkModeBtn").textContent = isDark ? "Light Mode" : "Dark Mode";
     updateChartColors(isDark);

@@ -134,7 +134,7 @@ for visualizing collected metrics.
 
 The dashboard is fully client-side and requires no backend.
 
-metrics.json will be loaded automaticly if is present in dashboard/data directory.
+If a metrics.json file is present in the dashboard/data directory, it will be loaded automatically when the dashboard starts.
 
 ---
 

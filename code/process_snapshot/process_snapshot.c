@@ -43,6 +43,7 @@ static int read_proc_io(pid_t pid, process_state_input_t *p);
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
 static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
+static bool is_pid_in_filter(pid_t pid, const int *filter_pids, size_t filter_pids_count);
 
 
 static process_snapshot_status acquire_lock(const char* lock_file_path)
@@ -241,7 +242,26 @@ static int is_numeric(const char *s)
             return 0;
     }
 
-    return 1;
+	return 1;
+}
+
+static bool is_pid_in_filter(pid_t pid, const int *filter_pids, size_t filter_pids_count)
+{
+	if ((filter_pids == NULL) || (filter_pids_count == 0))
+	{
+		// empty filter means include all processes
+		return true;
+	}
+
+	for (size_t i = 0; i < filter_pids_count; i++)
+	{
+		if (filter_pids[i] == pid)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -517,7 +537,7 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 	return process_snapshot_success;
 }
 
-process_snapshot_status collect_snapshot(void)
+process_snapshot_status collect_snapshot(const int *filter_pids, size_t filter_pids_count)
 {
 	//handle rotation
 	handle_rotations();
@@ -544,6 +564,12 @@ process_snapshot_status collect_snapshot(void)
 			//PID of the test program is included only if specified in the configuration
 			if(process_data.pid == getpid())
 				continue;
+		}
+
+		if(false == is_pid_in_filter(process_data.pid, filter_pids, filter_pids_count))
+		{
+			// PID was not requested by --filter_by_pid
+			continue;
 		}
 
 		if (read_proc_stat(process_data.pid,&process_data) == 0)
@@ -674,6 +700,5 @@ void process_snapshot_deinit(void)
 		}
 	}
 }
-
 
 

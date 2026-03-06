@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <limits.h>
 #include "args_parser.h"
 #include "process_stats.h"
 #include "config.h"
@@ -15,6 +16,8 @@ static parse_args_status parse_integer_arg(const char *arg, int *out_count);
 static parse_args_status parse_number_of_snapshots(const char* arg, int *out);
 static void print_usage(const char *prog);
 static parse_args_status parse_duration_ms(const char *arg, uint64_t *out_ms);
+static parse_args_status append_filter_pid(ap_arguments *cfg, int pid);
+static parse_args_status parse_filter_pid_list(const char *arg, ap_arguments *cfg);
 
 
 static void print_usage(const char *prog)
@@ -31,6 +34,7 @@ static void print_usage(const char *prog)
 	printf("  -f  --bytes_write <N>		Display N processes with the highest amount of KB written to disk\n");
 	printf("  -g  --read_rate <N>    	Display N processes with the highest disk read rate (KB/s)\n");
 	printf("  -a  --write_rate <N>    	Display N processes with the highest disk write rate (KB/s)\n");
+	printf("  -k  --filter_by_pid <pid>	Include only the PID, supports array\n"); 
 	printf("  -j  --delete_old_files	Delete the files stored during previous executions\n");
 	printf("  -v  --version         	Display the version of the tool and returns\n");
 	printf("  -h, --help            	Show this help\n");
@@ -91,7 +95,93 @@ static parse_args_status parse_duration_ms(const char *arg, uint64_t *out_ms)
         return parse_args_error;
     }
 
-    return parse_args_ok;
+	return parse_args_ok;
+}
+
+static parse_args_status append_filter_pid(ap_arguments *cfg, int pid)
+{
+	for (size_t i = 0; i < cfg->filter_pids_count; i++)
+	{
+		if (cfg->filter_pids[i] == pid)
+		{
+			// duplicate PID in filter list, ignore
+			return parse_args_ok;
+		}
+	}
+
+	if (cfg->filter_pids_count >= AP_MAX_FILTER_PIDS)
+	{
+		fprintf(stderr, "Invalid filter_by_pid: maximum of %d PIDs are supported\n", AP_MAX_FILTER_PIDS);
+		return parse_args_error;
+	}
+
+	cfg->filter_pids[cfg->filter_pids_count++] = pid;
+	return parse_args_ok;
+}
+
+static parse_args_status parse_filter_pid_list(const char *arg, ap_arguments *cfg)
+{
+	if (arg == NULL)
+	{
+		return parse_args_error;
+	}
+
+	const char *cursor = arg;
+
+	while (isspace((unsigned char)*cursor))
+	{
+		cursor++;
+	}
+
+	if (*cursor == '\0')
+	{
+		return parse_args_error;
+	}
+
+	while (1)
+	{
+		char *endptr = NULL;
+		errno = 0;
+		long value = strtol(cursor, &endptr, 10);
+
+		if (errno != 0 || endptr == cursor || value <= 0 || value > INT_MAX)
+		{
+			return parse_args_error;
+		}
+
+		if (append_filter_pid(cfg, (int)value) != parse_args_ok)
+		{
+			return parse_args_error;
+		}
+
+		while (isspace((unsigned char)*endptr))
+		{
+			endptr++;
+		}
+
+		if (*endptr == '\0')
+		{
+			break;
+		}
+
+		if (*endptr != ',')
+		{
+			return parse_args_error;
+		}
+
+		cursor = endptr + 1;
+		while (isspace((unsigned char)*cursor))
+		{
+			cursor++;
+		}
+
+		if (*cursor == '\0')
+		{
+			return parse_args_error;
+		}
+	}
+
+	return parse_args_ok;
 }
 
 
@@ -99,25 +189,28 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 {
 	bool boIntervalProvided = false;
 	bool boCountProvided = false;
+	cfg->filter_pids_count = 0;
+
 	static struct option long_opts[] = {
-			{ "interval", 			required_argument, 0, 'i' },
-			{ "count",    			required_argument, 0, 'n' },
-			{ "cpu_usage",      	required_argument, 0, 'c' },
-			{ "rss_usage",      	required_argument, 0, 'r' },
-			{ "rss_increase",      	required_argument, 0, 's' },
-			{ "rss_delta",      	required_argument, 0, 'd' },
-			{ "bytes_read",			required_argument, 0, 'e' },
-			{ "bytes_write",		required_argument, 0, 'f' },
-			{ "read_rate",			required_argument, 0, 'g' },
-			{ "write_rate",			required_argument, 0, 'a' },
-			{ "delete_old_files",	no_argument, 	   0, 'j' },
-			{ "version",			no_argument, 	   0, 'v' },
-			{ "help",     			no_argument,       0, 'h' },
-			{ 0, 0, 0, 0 }
-	};
+				{ "interval", 			required_argument, 0, 'i' },
+				{ "count",    			required_argument, 0, 'n' },
+				{ "cpu_usage",      	required_argument, 0, 'c' },
+				{ "rss_usage",      	required_argument, 0, 'r' },
+				{ "rss_increase",      	required_argument, 0, 's' },
+				{ "rss_delta",      	required_argument, 0, 'd' },
+				{ "bytes_read",			required_argument, 0, 'e' },
+				{ "bytes_write",		required_argument, 0, 'f' },
+				{ "read_rate",			required_argument, 0, 'g' },
+				{ "write_rate",			required_argument, 0, 'a' },
+				{ "filter_by_pid",		required_argument, 0, 'k' },
+				{ "delete_old_files",	no_argument, 	   0, 'j' },
+				{ "version",			no_argument, 	   0, 'v' },
+				{ "help",     			no_argument,       0, 'h' },
+				{ 0, 0, 0, 0 }
+		};
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:n:c:r:s:d:e:f:g:a:jvh", long_opts, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "i:n:c:r:s:d:e:f:g:a:k:jvh", long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
 			if (parse_duration_ms(optarg, &cfg->interval_ms) != parse_args_ok)
@@ -236,6 +329,14 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			else
 			{
 				cfg->end_metrics_args.write_rate_requested = true;
+			}
+			break;
+
+		case 'k':
+			if (parse_filter_pid_list(optarg, cfg) != parse_args_ok)
+			{
+				fprintf(stderr, "Invalid filter_by_pid list: %s\n", optarg);
+				return parse_args_error;
 			}
 			break;
 

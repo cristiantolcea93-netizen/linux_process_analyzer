@@ -187,7 +187,70 @@ void test_infinity_count(void)
 
     TEST_ASSERT_EQUAL(parse_args_ok, ret);
 
-    TEST_ASSERT_EQUAL(0x7FFFFFFF, cfg.count);
+	TEST_ASSERT_EQUAL(0x7FFFFFFF, cfg.count);
+}
+
+/* Filter by one PID */
+void test_filter_by_pid_single(void)
+{
+	char *argv[] = {
+		"process_analyzer",
+		"-i", "100ms",
+		"-n", "10",
+		"-k", "1234",
+		NULL
+	};
+
+	ap_arguments cfg;
+	reset_cfg(&cfg);
+
+	parse_args_status ret = run_parse(7, argv, &cfg);
+
+	TEST_ASSERT_EQUAL(parse_args_ok, ret);
+	TEST_ASSERT_EQUAL(1, cfg.filter_pids_count);
+	TEST_ASSERT_EQUAL(1234, cfg.filter_pids[0]);
+}
+
+/* Filter by comma separated PID list */
+void test_filter_by_pid_list(void)
+{
+	char *argv[] = {
+		"process_analyzer",
+		"-i", "100ms",
+		"-n", "10",
+		"-k", "1234,4567,9999",
+		NULL
+	};
+
+	ap_arguments cfg;
+	reset_cfg(&cfg);
+
+	parse_args_status ret = run_parse(7, argv, &cfg);
+
+	TEST_ASSERT_EQUAL(parse_args_ok, ret);
+	TEST_ASSERT_EQUAL(3, cfg.filter_pids_count);
+	TEST_ASSERT_EQUAL(1234, cfg.filter_pids[0]);
+	TEST_ASSERT_EQUAL(4567, cfg.filter_pids[1]);
+	TEST_ASSERT_EQUAL(9999, cfg.filter_pids[2]);
+}
+
+/* Invalid PID list */
+void test_filter_by_pid_invalid_list(void)
+{
+	char *argv[] = {
+		"process_analyzer",
+		"-i", "100ms",
+		"-n", "10",
+		"-k", "1234,abc",
+		NULL
+	};
+
+	ap_arguments cfg;
+	reset_cfg(&cfg);
+
+	parse_args_status ret = run_parse(7, argv, &cfg);
+
+	TEST_ASSERT_EQUAL(parse_args_error, ret);
 }
 
 
@@ -287,11 +350,14 @@ int main(void)
     RUN_TEST(test_no_args);
     RUN_TEST(test_basic_args);
     RUN_TEST(test_long_options);
-    RUN_TEST(test_cpu_metric);
-    RUN_TEST(test_multiple_metrics);
-    RUN_TEST(test_infinity_count);
-    RUN_TEST(test_invalid_interval);
-    RUN_TEST(test_missing_value);
+	RUN_TEST(test_cpu_metric);
+	RUN_TEST(test_multiple_metrics);
+	RUN_TEST(test_infinity_count);
+	RUN_TEST(test_filter_by_pid_single);
+	RUN_TEST(test_filter_by_pid_list);
+	RUN_TEST(test_filter_by_pid_invalid_list);
+	RUN_TEST(test_invalid_interval);
+	RUN_TEST(test_missing_value);
     RUN_TEST(test_unknown_option);
     RUN_TEST(test_help);
     RUN_TEST(test_version);

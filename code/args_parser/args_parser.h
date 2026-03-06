@@ -3,15 +3,19 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "process_stats.h"
 
 #define PROCESS_ANALYZER_VERSION	"process_analyzer V1.2"
+#define AP_MAX_FILTER_PIDS 1024
 
 typedef struct {
 	uint64_t 						interval_ms;   		// snapshot interval in ms
 	int      						count;         		// number of snapshots
 	bool 							delete_old_files;	// delete old files generated during previous builds
 	process_stats_metrics_arguments	end_metrics_args;	// end metrics arguments
+	int								filter_pids[AP_MAX_FILTER_PIDS];
+	size_t							filter_pids_count;
 }ap_arguments;
 
 typedef enum{

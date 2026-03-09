@@ -43,7 +43,7 @@ static int read_proc_io(pid_t pid, process_state_input_t *p);
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
 static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
-static bool is_pid_in_filter(pid_t pid, const int *filter_pids, size_t filter_pids_count);
+static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList);
 
 
 static process_snapshot_status acquire_lock(const char* lock_file_path)
@@ -245,17 +245,17 @@ static int is_numeric(const char *s)
 	return 1;
 }
 
-static bool is_pid_in_filter(pid_t pid, const int *filter_pids, size_t filter_pids_count)
+static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList)
 {
-	if ((filter_pids == NULL) || (filter_pids_count == 0))
+	if (whiteList->filter_pids_count == 0)
 	{
 		// empty filter means include all processes
 		return true;
 	}
 
-	for (size_t i = 0; i < filter_pids_count; i++)
+	for (size_t i = 0; i < whiteList->filter_pids_count; i++)
 	{
-		if (filter_pids[i] == pid)
+		if (whiteList->filter_pids[i] == pid)
 		{
 			return true;
 		}
@@ -537,7 +537,7 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 	return process_snapshot_success;
 }
 
-process_snapshot_status collect_snapshot(const int *filter_pids, size_t filter_pids_count)
+process_snapshot_status collect_snapshot(ap_pid_whitelist* whiteList)
 {
 	//handle rotation
 	handle_rotations();
@@ -566,7 +566,7 @@ process_snapshot_status collect_snapshot(const int *filter_pids, size_t filter_p
 				continue;
 		}
 
-		if(false == is_pid_in_filter(process_data.pid, filter_pids, filter_pids_count))
+		if(false == is_pid_in_filter(process_data.pid, whiteList))
 		{
 			// PID was not requested by --filter_by_pid
 			continue;

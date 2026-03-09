@@ -34,7 +34,7 @@ static void print_usage(const char *prog)
 	printf("  -f  --bytes_write <N>		Display N processes with the highest amount of KB written to disk\n");
 	printf("  -g  --read_rate <N>    	Display N processes with the highest disk read rate (KB/s)\n");
 	printf("  -a  --write_rate <N>    	Display N processes with the highest disk write rate (KB/s)\n");
-	printf("  -k  --filter_by_pid <pid>	Include only the PID, supports array\n"); 
+	printf("  -k  --filter_by_pid <pid>	Whitelist of comma separated PIDs to be included in the analysis\n"); 
 	printf("  -j  --delete_old_files	Delete the files stored during previous executions\n");
 	printf("  -v  --version         	Display the version of the tool and returns\n");
 	printf("  -h, --help            	Show this help\n");
@@ -100,22 +100,23 @@ static parse_args_status parse_duration_ms(const char *arg, uint64_t *out_ms)
 
 static parse_args_status append_filter_pid(ap_arguments *cfg, int pid)
 {
-	for (size_t i = 0; i < cfg->filter_pids_count; i++)
+
+	for (size_t i = 0; i < cfg->pid_whitelist.filter_pids_count; i++)
 	{
-		if (cfg->filter_pids[i] == pid)
+		if (cfg->pid_whitelist.filter_pids[i] == pid)
 		{
 			// duplicate PID in filter list, ignore
 			return parse_args_ok;
 		}
 	}
 
-	if (cfg->filter_pids_count >= AP_MAX_FILTER_PIDS)
+	if (cfg->pid_whitelist.filter_pids_count >= AP_MAX_FILTER_PIDS)
 	{
 		fprintf(stderr, "Invalid filter_by_pid: maximum of %d PIDs are supported\n", AP_MAX_FILTER_PIDS);
 		return parse_args_error;
 	}
 
-	cfg->filter_pids[cfg->filter_pids_count++] = pid;
+	cfg->pid_whitelist.filter_pids[cfg->pid_whitelist.filter_pids_count++] = pid;
 	return parse_args_ok;
 }
 
@@ -189,7 +190,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 {
 	bool boIntervalProvided = false;
 	bool boCountProvided = false;
-	cfg->filter_pids_count = 0;
+	cfg->pid_whitelist.filter_pids_count = 0;
 
 	static struct option long_opts[] = {
 				{ "interval", 			required_argument, 0, 'i' },

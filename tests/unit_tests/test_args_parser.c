@@ -207,8 +207,8 @@ void test_filter_by_pid_single(void)
 	parse_args_status ret = run_parse(7, argv, &cfg);
 
 	TEST_ASSERT_EQUAL(parse_args_ok, ret);
-	TEST_ASSERT_EQUAL(1, cfg.filter_pids_count);
-	TEST_ASSERT_EQUAL(1234, cfg.filter_pids[0]);
+	TEST_ASSERT_EQUAL(1, cfg.pid_whitelist.filter_pids_count);
+	TEST_ASSERT_EQUAL(1234, cfg.pid_whitelist.filter_pids[0]);
 }
 
 /* Filter by comma separated PID list */
@@ -228,10 +228,10 @@ void test_filter_by_pid_list(void)
 	parse_args_status ret = run_parse(7, argv, &cfg);
 
 	TEST_ASSERT_EQUAL(parse_args_ok, ret);
-	TEST_ASSERT_EQUAL(3, cfg.filter_pids_count);
-	TEST_ASSERT_EQUAL(1234, cfg.filter_pids[0]);
-	TEST_ASSERT_EQUAL(4567, cfg.filter_pids[1]);
-	TEST_ASSERT_EQUAL(9999, cfg.filter_pids[2]);
+	TEST_ASSERT_EQUAL(3, cfg.pid_whitelist.filter_pids_count);
+	TEST_ASSERT_EQUAL(1234, cfg.pid_whitelist.filter_pids[0]);
+	TEST_ASSERT_EQUAL(4567, cfg.pid_whitelist.filter_pids[1]);
+	TEST_ASSERT_EQUAL(9999, cfg.pid_whitelist.filter_pids[2]);
 }
 
 /* Invalid PID list */

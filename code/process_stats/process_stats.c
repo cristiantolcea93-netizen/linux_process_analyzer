@@ -838,7 +838,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			int n = args->read_rate_pids_to_display < count ? args->read_rate_pids_to_display : count;
 			qsort(arr, count, sizeof(process_state_t*), compare_avg_read_rate);
 
-			if(true == args->bytes_write_requested)
+			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by disk read rate (KB/s):\n", n);
 				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
@@ -863,7 +863,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			qsort(arr, count, sizeof(process_state_t*), compare_avg_write_rate);
 
 
-			if(true == args->bytes_write_requested)
+			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by disk write rate (KB/s):\n", n);
 				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");

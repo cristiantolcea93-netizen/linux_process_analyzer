@@ -15,7 +15,7 @@
 
 
 static int getTimeFd(uint64_t interval_ms);
-static void run_snapshot_once();
+static void run_snapshot_once(ap_pid_whitelist* whiteList);
 static void register_signal_handler();
 
 static ap_arguments gArguments;
@@ -68,9 +68,9 @@ static int getTimeFd(uint64_t interval_ms)
 }
 
 
-static void run_snapshot_once()
+static void run_snapshot_once(ap_pid_whitelist* whiteList)
 {
-	collect_snapshot();
+	collect_snapshot(whiteList);
 }
 
 
@@ -137,7 +137,7 @@ int main(int argc, char **argv)
 					while(expirations-- && noOfIterations < gArguments.count)
 					{
 						//recover number of iterations in case of expirations caused by high CPU load
-						run_snapshot_once();
+						run_snapshot_once(&gArguments.pid_whitelist);
 					}
 					noOfIterations++;
 				}

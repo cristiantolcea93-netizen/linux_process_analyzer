@@ -34,7 +34,7 @@ static void print_usage(const char *prog)
 	printf("  -f  --bytes_write <N>		Display N processes with the highest amount of KB written to disk\n");
 	printf("  -g  --read_rate <N>    	Display N processes with the highest disk read rate (KB/s)\n");
 	printf("  -a  --write_rate <N>    	Display N processes with the highest disk write rate (KB/s)\n");
-	printf("  -k  --filter_by_pid <pid>	Whitelist of comma separated PIDs to be included in the analysis\n"); 
+	printf("  -k  --filter_by_pid <pid>	Comma-separated list of PIDs. If not provided all running processes are included\n"); 
 	printf("  -j  --delete_old_files	Delete the files stored during previous executions\n");
 	printf("  -v  --version         	Display the version of the tool and returns\n");
 	printf("  -h, --help            	Show this help\n");

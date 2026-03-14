@@ -164,8 +164,6 @@ void test_is_pid_in_filter(void)
 	TEST_ASSERT_TRUE(is_pid_in_filter(202, &whitelist));
 	TEST_ASSERT_FALSE(is_pid_in_filter(999, &whitelist));
 
-	whitelist.filter_pids_count = 0;
-	TEST_ASSERT_TRUE(is_pid_in_filter(999, &whitelist));
 }
 
 void test_is_comm_in_filter(void)
@@ -185,9 +183,30 @@ void test_is_comm_in_filter(void)
 	TEST_ASSERT_TRUE(is_comm_in_filter("bash", &whitelist));
 	TEST_ASSERT_TRUE(is_comm_in_filter("sleep", &whitelist));
 	TEST_ASSERT_FALSE(is_comm_in_filter("systemd", &whitelist));
+}
 
-	whitelist.filter_comms_count = 0;
-	TEST_ASSERT_TRUE(is_comm_in_filter("anything", &whitelist));
+void test_if_filtering_enabled(void)
+{
+	ap_pid_whitelist whitelist;
+
+	whitelist.filter_pids_count=0;
+	whitelist.filter_comms_count=0;
+
+	TEST_ASSERT_FALSE(is_filtering_enabled(&whitelist));
+
+	whitelist.filter_pids_count=1;
+	whitelist.filter_comms_count=0;
+
+	TEST_ASSERT_TRUE(is_filtering_enabled(&whitelist));
+
+	whitelist.filter_pids_count=0;
+	whitelist.filter_comms_count=12;
+
+	TEST_ASSERT_TRUE(is_filtering_enabled(&whitelist));
+
+	whitelist.filter_pids_count=100;
+	whitelist.filter_comms_count=12;
+	TEST_ASSERT_TRUE(is_filtering_enabled(&whitelist));
 }
 
 int main(void)
@@ -200,6 +219,7 @@ int main(void)
     RUN_TEST(test_acquire_lock);
     RUN_TEST(test_is_pid_in_filter);
     RUN_TEST(test_is_comm_in_filter);
+    RUN_TEST(test_if_filtering_enabled);
 
     return UNITY_END();
 }

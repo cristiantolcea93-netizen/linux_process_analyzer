@@ -45,6 +45,7 @@ static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
 static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList);
 static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList);
+static bool is_filtering_enabled(ap_pid_whitelist* whiteList);
 
 
 static process_snapshot_status acquire_lock(const char* lock_file_path)
@@ -248,11 +249,6 @@ static int is_numeric(const char *s)
 
 static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList)
 {
-	if (whiteList->filter_pids_count == 0)
-	{
-		// empty filter means include all processes
-		return true;
-	}
 
 	for (size_t i = 0; i < whiteList->filter_pids_count; i++)
 	{
@@ -267,11 +263,6 @@ static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList)
 
 static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList)
 {
-	if (whiteList->filter_comms_count == 0)
-	{
-		// empty filter means include all process names
-		return true;
-	}
 
 	if (comm == NULL || *comm == '\0')
 	{
@@ -287,6 +278,18 @@ static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList)
 	}
 
 	return false;
+}
+
+static bool is_filtering_enabled(ap_pid_whitelist* whiteList)
+{
+	if((whiteList->filter_comms_count == 0)&&(whiteList->filter_pids_count == 0))
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
 }
 
 
@@ -588,12 +591,17 @@ process_snapshot_status collect_snapshot(ap_pid_whitelist* whiteList)
 
 		if (read_proc_stat(process_data.pid,&process_data) == 0)
 		{
-			if((false == is_comm_in_filter(process_data.comm, whiteList)) &&
-			   (false == is_pid_in_filter(process_data.pid, whiteList)))
+			if(true == is_filtering_enabled(whiteList))
 			{
-				//neither process name (--filter_by_name) nor its PID (--filter_by_name) was requested
-				continue;
+				//only check the filters if at least one filter is enabled
+				if((false == is_comm_in_filter(process_data.comm, whiteList)) &&
+						(false == is_pid_in_filter(process_data.pid, whiteList)))
+				{
+					//neither process name (--filter_by_name) nor its PID (--filter_by_name) was requested
+					continue;
+				}
 			}
+
 
 			log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d\n",
 					process_data.pid, process_data.comm, process_data.state, process_data.ppid, process_data.utime, process_data.stime, process_data.rssKb, process_data.read_kbytes, process_data.write_kbytes, process_data.threads);

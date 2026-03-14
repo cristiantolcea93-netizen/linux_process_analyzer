@@ -19,6 +19,7 @@ static void print_usage(const char *prog);
 static parse_args_status parse_duration_ms(const char *arg, uint64_t *out_ms);
 static parse_args_status append_filter_pid(ap_arguments *cfg, int pid);
 static parse_args_status append_filter_comm(ap_arguments *cfg, const char *comm_start, size_t comm_len);
+static void dump_whitelist_filters(ap_pid_whitelist* whitelist);
 
 typedef enum
 {
@@ -205,6 +206,47 @@ static parse_args_status append_filter_comm(ap_arguments *cfg, const char *comm_
 	new_comm[comm_len] = '\0';
 	cfg->pid_whitelist.filter_comms[cfg->pid_whitelist.filter_comms_count++] = new_comm;
 	return parse_args_ok;
+}
+
+
+static void dump_whitelist_filters(ap_pid_whitelist* whitelist)
+{
+	printf("############ White list filters - begin ###########\n");
+	if (whitelist->filter_comms != NULL)
+	{
+		if(whitelist->filter_comms_count != 0)
+		{
+			printf("COMM list:\n");
+			for (size_t i = 0; i < whitelist->filter_comms_count; i++)
+			{
+				printf("%s\n",whitelist->filter_comms[i]);
+			}
+		}
+		else
+		{
+			printf("Empty process name list!\n");
+		}
+
+	}
+	else
+	{
+		printf("No process name filter given!\n");
+	}
+
+	if (whitelist->filter_pids_count !=0)
+	{
+		printf("PID list:\n");
+		for (size_t i = 0;i<whitelist->filter_pids_count;i++)
+		{
+			printf("%d\n",whitelist->filter_pids[i]);
+		}
+	}
+	else
+	{
+		printf("Empty PID list!\n");
+	}
+
+	printf("############ White list filters - end ###########\n");
 }
 
 static parse_args_status parse_pid_token(const char *token_start, size_t token_len, int *out_pid)
@@ -553,6 +595,9 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			process_stats_initialize(argv[0]);
 		}
 	}
+
+	//dump process white list
+	dump_whitelist_filters(&cfg->pid_whitelist);
 
 	return parse_args_ok;
 }

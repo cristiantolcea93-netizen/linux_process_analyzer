@@ -586,17 +586,12 @@ process_snapshot_status collect_snapshot(ap_pid_whitelist* whiteList)
 				continue;
 		}
 
-		if(false == is_pid_in_filter(process_data.pid, whiteList))
-		{
-			// PID was not requested by --filter_by_pid
-			continue;
-		}
-
 		if (read_proc_stat(process_data.pid,&process_data) == 0)
 		{
-			if(false == is_comm_in_filter(process_data.comm, whiteList))
+			if((false == is_comm_in_filter(process_data.comm, whiteList)) &&
+			   (false == is_pid_in_filter(process_data.pid, whiteList)))
 			{
-				// process name was not requested by --filter_by_name
+				//neither process name (--filter_by_name) nor its PID (--filter_by_name) was requested
 				continue;
 			}
 

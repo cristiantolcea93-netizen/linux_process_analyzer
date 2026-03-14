@@ -61,6 +61,7 @@ void test_no_args(void)
     TEST_ASSERT_EQUAL(0, cfg.interval_ms);
     TEST_ASSERT_EQUAL(0, cfg.count);
     TEST_ASSERT_FALSE(cfg.delete_old_files);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -85,6 +86,7 @@ void test_basic_args(void)
     TEST_ASSERT_EQUAL(100, cfg.interval_ms);
     TEST_ASSERT_EQUAL(10, cfg.count);
     TEST_ASSERT_EQUAL(1,cfg.delete_old_files);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -106,6 +108,7 @@ void test_long_options(void)
 
     TEST_ASSERT_EQUAL(1000, cfg.interval_ms);
     TEST_ASSERT_EQUAL(5, cfg.count);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -128,6 +131,7 @@ void test_cpu_metric(void)
     TEST_ASSERT_TRUE(cfg.end_metrics_args.cpu_average_requested);
     TEST_ASSERT_EQUAL(7,
         cfg.end_metrics_args.cpu_average_pids_to_display);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -168,6 +172,7 @@ void test_multiple_metrics(void)
 
     TEST_ASSERT_EQUAL(4,
         cfg.end_metrics_args.rss_delta_pids_to_display);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -188,6 +193,7 @@ void test_infinity_count(void)
     TEST_ASSERT_EQUAL(parse_args_ok, ret);
 
 	TEST_ASSERT_EQUAL(0x7FFFFFFF, cfg.count);
+	ap_free_arguments(&cfg);
 }
 
 /* Filter by one PID */
@@ -208,7 +214,9 @@ void test_filter_by_pid_single(void)
 
 	TEST_ASSERT_EQUAL(parse_args_ok, ret);
 	TEST_ASSERT_EQUAL(1, cfg.pid_whitelist.filter_pids_count);
+	TEST_ASSERT_NOT_NULL(cfg.pid_whitelist.filter_pids);
 	TEST_ASSERT_EQUAL(1234, cfg.pid_whitelist.filter_pids[0]);
+	ap_free_arguments(&cfg);
 }
 
 /* Filter by comma separated PID list */
@@ -229,9 +237,11 @@ void test_filter_by_pid_list(void)
 
 	TEST_ASSERT_EQUAL(parse_args_ok, ret);
 	TEST_ASSERT_EQUAL(3, cfg.pid_whitelist.filter_pids_count);
+	TEST_ASSERT_NOT_NULL(cfg.pid_whitelist.filter_pids);
 	TEST_ASSERT_EQUAL(1234, cfg.pid_whitelist.filter_pids[0]);
 	TEST_ASSERT_EQUAL(4567, cfg.pid_whitelist.filter_pids[1]);
 	TEST_ASSERT_EQUAL(9999, cfg.pid_whitelist.filter_pids[2]);
+	ap_free_arguments(&cfg);
 }
 
 /* Invalid PID list */
@@ -251,6 +261,97 @@ void test_filter_by_pid_invalid_list(void)
 	parse_args_status ret = run_parse(7, argv, &cfg);
 
 	TEST_ASSERT_EQUAL(parse_args_error, ret);
+	ap_free_arguments(&cfg);
+}
+
+/* Filter by one process name */
+void test_filter_by_name_single(void)
+{
+	char *argv[] = {
+		"process_analyzer",
+		"-i", "100ms",
+		"-n", "10",
+		"-l", "systemd",
+		NULL
+	};
+
+	ap_arguments cfg;
+	reset_cfg(&cfg);
+
+	parse_args_status ret = run_parse(7, argv, &cfg);
+
+	TEST_ASSERT_EQUAL(parse_args_ok, ret);
+	TEST_ASSERT_EQUAL(1, cfg.pid_whitelist.filter_comms_count);
+	TEST_ASSERT_NOT_NULL(cfg.pid_whitelist.filter_comms);
+	TEST_ASSERT_EQUAL_STRING("systemd", cfg.pid_whitelist.filter_comms[0]);
+	ap_free_arguments(&cfg);
+}
+
+/* Filter by comma separated process names with spaces */
+void test_filter_by_name_list(void)
+{
+	char *argv[] = {
+		"process_analyzer",
+		"-i", "100ms",
+		"-n", "10",
+		"-l", "systemd, pipewire ,bash",
+		NULL
+	};
+
+	ap_arguments cfg;
+	reset_cfg(&cfg);
+
+	parse_args_status ret = run_parse(7, argv, &cfg);
+
+	TEST_ASSERT_EQUAL(parse_args_ok, ret);
+	TEST_ASSERT_EQUAL(3, cfg.pid_whitelist.filter_comms_count);
+	TEST_ASSERT_NOT_NULL(cfg.pid_whitelist.filter_comms);
+	TEST_ASSERT_EQUAL_STRING("systemd", cfg.pid_whitelist.filter_comms[0]);
+	TEST_ASSERT_EQUAL_STRING("pipewire", cfg.pid_whitelist.filter_comms[1]);
+	TEST_ASSERT_EQUAL_STRING("bash", cfg.pid_whitelist.filter_comms[2]);
+	ap_free_arguments(&cfg);
+}
+
+/* Duplicated names are ignored */
+void test_filter_by_name_duplicates(void)
+{
+	char *argv[] = {
+		"process_analyzer",
+		"-i", "100ms",
+		"-n", "10",
+		"-l", "bash,bash,bash",
+		NULL
+	};
+
+	ap_arguments cfg;
+	reset_cfg(&cfg);
+
+	parse_args_status ret = run_parse(7, argv, &cfg);
+
+	TEST_ASSERT_EQUAL(parse_args_ok, ret);
+	TEST_ASSERT_EQUAL(1, cfg.pid_whitelist.filter_comms_count);
+	TEST_ASSERT_EQUAL_STRING("bash", cfg.pid_whitelist.filter_comms[0]);
+	ap_free_arguments(&cfg);
+}
+
+/* Invalid process name list */
+void test_filter_by_name_invalid_list(void)
+{
+	char *argv[] = {
+		"process_analyzer",
+		"-i", "100ms",
+		"-n", "10",
+		"-l", "systemd,,bash",
+		NULL
+	};
+
+	ap_arguments cfg;
+	reset_cfg(&cfg);
+
+	parse_args_status ret = run_parse(7, argv, &cfg);
+
+	TEST_ASSERT_EQUAL(parse_args_error, ret);
+	ap_free_arguments(&cfg);
 }
 
 
@@ -268,6 +369,7 @@ void test_invalid_interval(void)
     parse_args_status ret = run_parse(3, argv, &cfg);
 
     TEST_ASSERT_EQUAL(parse_args_error, ret);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -285,6 +387,7 @@ void test_missing_value(void)
     parse_args_status ret = run_parse(2, argv, &cfg);
 
     TEST_ASSERT_EQUAL(parse_args_error, ret);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -302,6 +405,7 @@ void test_unknown_option(void)
     parse_args_status ret = run_parse(2, argv, &cfg);
 
     TEST_ASSERT_EQUAL(parse_args_error, ret);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -319,6 +423,7 @@ void test_help(void)
     parse_args_status ret = run_parse(2, argv, &cfg);
 
     TEST_ASSERT_EQUAL(parse_args_error, ret);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -336,6 +441,7 @@ void test_version(void)
     parse_args_status ret = run_parse(2, argv, &cfg);
 
     TEST_ASSERT_EQUAL(parse_args_error, ret);
+    ap_free_arguments(&cfg);
 }
 
 
@@ -356,6 +462,10 @@ int main(void)
     RUN_TEST(test_filter_by_pid_single);
     RUN_TEST(test_filter_by_pid_list);
     RUN_TEST(test_filter_by_pid_invalid_list);
+    RUN_TEST(test_filter_by_name_single);
+    RUN_TEST(test_filter_by_name_list);
+    RUN_TEST(test_filter_by_name_duplicates);
+    RUN_TEST(test_filter_by_name_invalid_list);
     RUN_TEST(test_invalid_interval);
     RUN_TEST(test_missing_value);
     RUN_TEST(test_unknown_option);

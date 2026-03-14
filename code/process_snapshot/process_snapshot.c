@@ -44,6 +44,7 @@ static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
 static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
 static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList);
+static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList);
 
 
 static process_snapshot_status acquire_lock(const char* lock_file_path)
@@ -264,6 +265,30 @@ static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList)
 	return false;
 }
 
+static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList)
+{
+	if (whiteList->filter_comms_count == 0)
+	{
+		// empty filter means include all process names
+		return true;
+	}
+
+	if (comm == NULL || *comm == '\0')
+	{
+		return false;
+	}
+
+	for (size_t i = 0; i < whiteList->filter_comms_count; i++)
+	{
+		if (strcmp(whiteList->filter_comms[i], comm) == 0)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
 {
@@ -404,11 +429,6 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 		//io data available
 		proc_data->bo_is_io_valid = true;
 	}
-
-
-	log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d\n",
-			pid, proc_data->comm, proc_data->state, proc_data->ppid, proc_data->utime, proc_data->stime, proc_data->rssKb, proc_data->read_kbytes, proc_data->write_kbytes, proc_data->threads);
-
 
 	return 0;
 }
@@ -574,6 +594,15 @@ process_snapshot_status collect_snapshot(ap_pid_whitelist* whiteList)
 
 		if (read_proc_stat(process_data.pid,&process_data) == 0)
 		{
+			if(false == is_comm_in_filter(process_data.comm, whiteList))
+			{
+				// process name was not requested by --filter_by_name
+				continue;
+			}
+
+			log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d\n",
+					process_data.pid, process_data.comm, process_data.state, process_data.ppid, process_data.utime, process_data.stime, process_data.rssKb, process_data.read_kbytes, process_data.write_kbytes, process_data.threads);
+
 			//feed the data to process_stat
 			process_stats_update(&process_data);
 
@@ -700,5 +729,4 @@ void process_snapshot_deinit(void)
 		}
 	}
 }
-
 

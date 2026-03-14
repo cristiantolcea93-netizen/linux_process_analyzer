@@ -7,11 +7,14 @@
 #include "process_stats.h"
 
 #define PROCESS_ANALYZER_VERSION	"process_analyzer V1.2"
-#define AP_MAX_FILTER_PIDS 1024
 
 typedef struct{
-	int                             filter_pids[AP_MAX_FILTER_PIDS];
+	int*                            filter_pids;
 	size_t                          filter_pids_count;
+	size_t                          filter_pids_capacity;
+	char**                          filter_comms;
+	size_t                          filter_comms_count;
+	size_t                          filter_comms_capacity;
 }ap_pid_whitelist;
 
 typedef struct {
@@ -28,5 +31,6 @@ typedef enum{
 }parse_args_status;
 
 extern parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg);
+extern void ap_free_arguments(ap_arguments *cfg);
 
 #endif /* ARGS_PARSER_ARGS_PARSER_H_ */

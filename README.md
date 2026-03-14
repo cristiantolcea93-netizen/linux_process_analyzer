@@ -39,7 +39,7 @@ It focuses on **low overhead and long-term observation** rather than deep profil
 - Disk I/O metrics per process:
   - Total bytes read / written
   - Average disk read/write rate (KB/s)
-- Optional PID filtering to monitor only selected processes
+- Optional PID and process-name filtering to monitor only selected processes
 - Snapshot logging with log rotation
 - Graceful shutdown on `CTRL+C` or `SIGTERM`
 - Supports infinite runtime mode (`-n infinity`)
@@ -120,7 +120,7 @@ and allows interactive exploration of collected data.
 At each sampling interval, the tool:
 
 - Reads process data from `/proc/[pid]/stat`, `/proc/[pid]/status`, and `/proc/[pid]/io`
-- Stores a snapshot of all running processes (or only the selected PIDs when filtering is enabled)
+- Stores a snapshot of all running processes (or only selected PIDs/process names when filtering is enabled)
 - Accumulates statistics over time using **monotonic timestamps**
 - Designed to minimize per-sample overhead even at small intervals (tens of milliseconds)
 
@@ -291,6 +291,7 @@ The following options are **required**:
 -g, --read_rate <N>         Top N by read rate (KB/s)
 -a, --write_rate <N>        Top N by write rate (KB/s)
 -k, --filter_by_pid <pid>   Comma-separated list of PIDs to include in the analysis
+-l, --filter_by_name <name> Comma-separated list of process names to include in the analysis
 
 -j, --delete_old_files      Delete old log files
 -v, --version               Show version
@@ -323,6 +324,19 @@ Monitor only specific processes:
     -n 100 \
     -k 1234,5678
 ```
+
+### Filtering by Process Name
+
+Monitor only processes matching one or more `comm` names:
+
+```bash
+./process_analyzer \
+    -i 1s \
+    -n 100 \
+    -l systemd,bash
+```
+
+If both `-k` and `-l` are provided, both filters are applied.
 
 ---
 

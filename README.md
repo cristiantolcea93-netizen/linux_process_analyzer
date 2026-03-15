@@ -11,20 +11,18 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> ⚠️ **Repository Mirror Notice**
->
-> This GitLab repository is currently a mirror/backup.
->The primary repository is hosted on GitHub:
->
-> https://github.com/cristiantolcea93-netizen/linux_process_analyzer
-> Updates are pushed to both locations when possible.
-
-
-
 `process_analyzer` is a lightweight Linux command-line tool written in C that periodically samples process information from `/proc` and provides aggregated statistics at the end of execution.
 
 The tool is designed for **low-overhead monitoring**, accurate **time-based calculations**, and **post-run analysis** of CPU, memory (RSS), and disk I/O usage per process. 
 It focuses on **low overhead and long-term observation** rather than deep profiling.
+
+**Repository Mirrors**
+
+- Main: [GitHub repo](https://github.com/cristiantolcea93-netizen/linux_process_analyzer)
+
+- Mirror: [GitLab repo](https://gitlab.com/cristian.tolcea93/linux_process_analyzer)
+
+Updates are pushed to both locations when possible.
 
 ---
 
@@ -336,7 +334,23 @@ Monitor only processes matching one or more `comm` names:
     -l systemd,bash
 ```
 
-If both `-k` and `-l` are provided, both filters are applied.
+### Filtering by Process Name or PID
+
+If both `-k` and `-l` are provided, both filters are applied. **OR** rule is used between them.
+
+```bash
+./process_analyzer \
+    -i 1s \
+    -n 100 \
+    -c 10 \
+    -l systemd,bash \
+    -k 1234,5678
+```
+
+The example from above will include in the analysis: 
+
+- all processes named "systemd" and "bash"
+- processes with PID 1234 and 5678
 
 ---
 

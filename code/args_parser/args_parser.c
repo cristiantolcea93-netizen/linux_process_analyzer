@@ -13,6 +13,8 @@
 #define MAX_NUMBER_OF_SNAPSHOTS 0x7FFFFFFF
 #define AP_INITIAL_FILTER_CAPACITY 8
 
+//#define debug_whitelist un-comment this line to enable printing of the white list at the start of the program
+
 static parse_args_status parse_integer_arg(const char *arg, int *out_count);
 static parse_args_status parse_number_of_snapshots(const char* arg, int *out);
 static void print_usage(const char *prog);
@@ -211,6 +213,7 @@ static parse_args_status append_filter_comm(ap_arguments *cfg, const char *comm_
 
 static void dump_whitelist_filters(ap_pid_whitelist* whitelist)
 {
+#ifdef debug_whitelist
 	printf("############ White list filters - begin ###########\n");
 	if (whitelist->filter_comms != NULL)
 	{
@@ -247,6 +250,9 @@ static void dump_whitelist_filters(ap_pid_whitelist* whitelist)
 	}
 
 	printf("############ White list filters - end ###########\n");
+#else
+	(void)whitelist;
+#endif
 }
 
 static parse_args_status parse_pid_token(const char *token_start, size_t token_len, int *out_pid)

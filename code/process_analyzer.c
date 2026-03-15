@@ -104,7 +104,6 @@ int main(int argc, char **argv)
 				return -1;
 			}
 
-			//todo init compression only if enabled in configuration
 			compression_worker_init();
 
 			int tfd = getTimeFd(gArguments.interval_ms);

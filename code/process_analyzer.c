@@ -92,6 +92,7 @@ int main(int argc, char **argv)
 				if(process_snapshot_success != process_snapshot_delete_old_files())
 				{
 					/*failed to delete old files, do not start the analyzer*/
+					ap_free_arguments(&gArguments);
 					return -1;
 				}
 			}
@@ -99,10 +100,10 @@ int main(int argc, char **argv)
 			if(process_snapshot_success != process_snapshot_initialize())
 			{
 				//failed to initialize process snapshot
+				ap_free_arguments(&gArguments);
 				return -1;
 			}
 
-			//todo init compression only if enabled in configuration
 			compression_worker_init();
 
 			int tfd = getTimeFd(gArguments.interval_ms);
@@ -141,16 +142,21 @@ int main(int argc, char **argv)
 					}
 					noOfIterations++;
 				}
+				close(tfd);
 				//deinit snapshot
 				process_snapshot_deinit();
 				//stop compression worker
 				compression_worker_shutdown();
 				//print end of execution metrics
 				process_stats_print_metrics(&(gArguments.end_metrics_args),gArguments.interval_ms);
+				ap_free_arguments(&gArguments);
 			}
 			else
 			{
 				//failed to start the timer
+				process_snapshot_deinit();
+				compression_worker_shutdown();
+				ap_free_arguments(&gArguments);
 				return -1;
 			}
 
@@ -158,12 +164,14 @@ int main(int argc, char **argv)
 		else
 		{
 			//failed to parse arguments
+			ap_free_arguments(&gArguments);
 			return -1;
 		}
 	}
 	else
 	{
 		//failed to parse the configuration
+		ap_free_arguments(&gArguments);
 		return -1;
 	}
 

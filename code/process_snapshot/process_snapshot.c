@@ -483,7 +483,7 @@ static void write_output_to_json(process_state_input_t* input)
 		        "\"io_read_kb\":%lld,"
 		        "\"io_write_kb\":%lld,"
 		        "\"threads\":%d,"
-				"\"fds\":%lu,"
+				"\"fds\":%lu"
 		        "}\n",
 				input->h_r_timestamp,
 		        input->pid,

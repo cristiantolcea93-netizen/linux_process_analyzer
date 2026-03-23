@@ -296,7 +296,7 @@ body.light-mode .chart-card {
 
     <div class="sidebar-section-label">Overview</div>
     <div class="nav-item active"><span class="icon">⊞</span> Dashboard</div>
-    <div class="nav-item" onclick="window.open('records.html','_blank')"><span class="icon">∿</span> Timeline</div>
+    <div class="nav-item" onclick="window.location.href='records.html'"><span class="icon">∿</span> Timeline</div>
 
     <div class="sidebar-divider"></div>
 
@@ -421,6 +421,8 @@ function toggleLightMode() {
     document.body.classList.toggle("light-mode");
     const lbl = document.getElementById("themeLbl");
     lbl.textContent = document.body.classList.contains("light-mode") ? "Dark Mode" : "Light Mode";
+    const saved = localStorage.getItem("lastMetrics");
+    if (saved) { try { renderDashboard(JSON.parse(saved)); } catch {} }
 }
 
 function showProcessInfo(process) {
@@ -519,7 +521,7 @@ function getChartDefaults() {
     const isDark = !document.body.classList.contains("light-mode");
     return {
         gridColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)",
-        tickColor: isDark ? "#4a5168" : "#8b92a5",
+        tickColor: isDark ? "#e8ecf4" : "#131722",
         legendColor: isDark ? "#8b92a5" : "#4a5168",
     };
 }
@@ -576,7 +578,7 @@ function chartClickHandler(list) {
         const index = elements[0].index;
         const process = list[index];
         showProcessInfo(process);
-        window.open(`records.html?pid=${process.pid}`, "_blank");
+        window.location.href = `records.html?pid=${process.pid}`;
     };
 }
 

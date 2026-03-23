@@ -2,154 +2,350 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Process Analyzer Dashboard</title>
+<title>Process Analyzer — Records</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
 <style>
+:root {
+    --bg-base: #0d0f14;
+    --bg-surface: #151820;
+    --bg-card: #1a1e28;
+    --bg-hover: #1f2436;
+    --border: #252a38;
+    --accent-blue: #4f8ef7;
+    --accent-green: #2dd4a0;
+    --text-primary: #e8ecf4;
+    --text-secondary: #8b92a5;
+    --text-muted: #4a5168;
+    --sidebar-width: 200px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-    background: #f8f9fa;
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
 }
 
-h1 {
-    text-align: center;
+/* ── SIDEBAR ── */
+#sidebar {
+    width: var(--sidebar-width);
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0;
+    height: 100vh;
+    z-index: 100;
+    padding: 0 0 20px 0;
 }
 
-.section {
-    margin-top: 30px;
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 18px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
 }
 
-.meta-box {
-    background: white;
-    padding: 15px;
+.logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent-blue);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.sidebar-logo span {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+}
+
+.sidebar-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 12px 18px 6px;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin: 1px 8px;
     border-radius: 6px;
-    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    transition: background 0.15s, color 0.15s;
+    text-decoration: none;
 }
 
-.chart-container {
-    width: 45%;
-    display: inline-block;
-    margin: 10px;
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active {
+    background: rgba(79, 142, 247, 0.12);
+    color: var(--accent-blue);
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
+.nav-item .icon { font-size: 15px; opacity: 0.85; }
+
+.sidebar-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 10px 18px;
 }
 
-th, td {
-    padding: 8px;
-    border: 1px solid #ddd;
-    text-align: center;
+.sidebar-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin: 1px 8px;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+}
+.sidebar-action:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+#fileInput { display: none; }
+
+/* ── MAIN ── */
+#main {
+    margin-left: var(--sidebar-width);
+    flex: 1;
+    padding: 28px 28px 40px;
+    min-width: 0;
 }
 
-th {
-    background: #eee;
+.page-header {
+    margin-bottom: 24px;
+}
+.page-header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
 }
 
-body.dark-mode {
-    background: #1a1a2e;
-    color: #eee;
+/* ── CONTROLS CARD ── */
+.controls-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
 }
 
-body.dark-mode .meta-box {
-    background: #16213e;
-    box-shadow: 0 0 5px rgba(255,255,255,0.1);
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-body.dark-mode table {
-    background: #16213e;
+.control-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    white-space: nowrap;
 }
 
-body.dark-mode th, body.dark-mode td {
-    border: 1px solid #444;
+select {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+}
+select:hover, select:focus { border-color: var(--accent-blue); }
+
+/* ── CHART CARD ── */
+.chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
 }
 
-body.dark-mode th {
-    background: #0f3460;
+.chart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
 }
 
+.chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chart-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-muted);
+}
+
+/* ── LIGHT MODE ── */
+body.light-mode {
+    --bg-base: #f0f2f7;
+    --bg-surface: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #f5f7fc;
+    --border: #e0e4ef;
+    --text-primary: #131722;
+    --text-secondary: #4a5168;
+    --text-muted: #8b92a5;
+}
+
+body.light-mode select {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 </style>
 </head>
 
 <body>
 
-<h1>📊 Records </h1>
+<!-- SIDEBAR -->
+<nav id="sidebar">
+    <div class="sidebar-logo">
+        <div class="logo-icon">PA</div>
+        <span>Process Analyzer</span>
+    </div>
 
-<div class="section">
+    <div class="sidebar-section-label">Overview</div>
+    <div class="nav-item" onclick="window.location.href='index.html'"><span class="icon">⊞</span> Dashboard</div>
+    <div class="nav-item active"><span class="icon">∿</span> Timeline</div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section-label">Actions</div>
+    <div class="sidebar-action" onclick="document.getElementById('fileInput').click()">
+        <span class="icon">↑</span> Load File
+    </div>
+    <div class="sidebar-action" onclick="toggleLightMode()">
+        <span class="icon">◑</span> <span id="themeLbl">Light Mode</span>
+    </div>
 
     <input type="file" id="fileInput" accept=".jsonl">
+</nav>
 
-    <br><br>
+<!-- MAIN -->
+<main id="main">
+    <div class="page-header">
+        <h1>Timeline</h1>
+    </div>
 
-    PID:
-    <select id="pidSelect"></select>
+    <!-- CONTROLS -->
+    <div class="controls-card">
+        <div class="control-group">
+            <span class="control-label">PID</span>
+            <select id="pidSelect"></select>
+        </div>
+        <div class="control-group">
+            <span class="control-label">Metric</span>
+            <select id="metricSelect">
+                <option value="rss">RSS (MB)</option>
+                <option value="cpu">CPU Time</option>
+                <option value="read">Read KB</option>
+                <option value="write">Write KB</option>
+                <option value="threads">Threads</option>
+            </select>
+        </div>
+    </div>
 
-    Metric:
-    <select id="metricSelect">
-        <option value="rss">RSS (MB)</option>
-        <option value="cpu">CPU Time</option>
-        <option value="read">Read KB</option>
-        <option value="write">Write KB</option>
-        <option value="threads">Threads</option>
-    </select>
-
-</div>
-
-<div class="section">
-    <canvas id="timelineChart"></canvas>
-</div>
-
+    <!-- CHART -->
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <span class="chart-title" id="chartLabel">Select a file to begin</span>
+            <span class="chart-badge" id="chartBadge">—</span>
+        </div>
+        <canvas id="timelineChart"></canvas>
+    </div>
+</main>
 
 <script>
-
 let pidMap = {};
 let timelineChart = null;
 
-function getPIDFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("pid");
+const metricLabels = {
+    rss: "RSS (MB)",
+    cpu: "CPU Time",
+    read: "Read KB",
+    write: "Write KB",
+    threads: "Threads"
+};
+
+function toggleLightMode() {
+    document.body.classList.toggle("light-mode");
+    document.getElementById("themeLbl").textContent =
+        document.body.classList.contains("light-mode") ? "Dark Mode" : "Light Mode";
+    updateChart();
 }
 
-		
+function getPIDFromURL() {
+    return new URLSearchParams(window.location.search).get("pid");
+}
+
 function parseJSONL(text) {
-    const lines = text.trim().split("\n");
-
-    const records = [];
-
-    for (const line of lines) {
-        try {
-            records.push(JSON.parse(line));
-        } catch {
-            // skip bad lines
-        }
-    }
-
-    return records;
+    return text.trim().split("\n").flatMap(line => {
+        try { return [JSON.parse(line)]; } catch { return []; }
+    });
 }
 
 function groupByPID(records) {
     const map = {};
-
     for (const r of records) {
-        if (!map[r.pid]) {
-            map[r.pid] = [];
-        }
+        if (!map[r.pid]) map[r.pid] = [];
         map[r.pid].push(r);
     }
-
     return map;
 }
 
 function populatePIDSelect(pidMap) {
     const sel = document.getElementById("pidSelect");
     sel.innerHTML = "";
-
     Object.keys(pidMap).forEach(pid => {
         const opt = document.createElement("option");
         opt.value = pid;
@@ -159,165 +355,130 @@ function populatePIDSelect(pidMap) {
 }
 
 function extractSeries(list, metric) {
-    const points = [];
-
-    for (const r of list) {
+    return list.flatMap(r => {
         let val = null;
-
-        switch(metric) {
-            case "rss":
-                if (r.rss_kb >= 0)
-                    val = r.rss_kb / 1024;
-                break;
-
-            case "cpu":
-                val = r.utime + r.stime;
-                break;
-
-            case "read":
-                if (r.io_read_kb >= 0)
-                    val = r.io_read_kb;
-                break;
-
-            case "write":
-                if (r.io_write_kb >= 0)
-                    val = r.io_write_kb;
-                break;
-
-            case "threads":
-                val = r.threads;
-                break;
+        switch (metric) {
+            case "rss":   if (r.rss_kb >= 0) val = r.rss_kb / 1024; break;
+            case "cpu":   val = r.utime + r.stime; break;
+            case "read":  if (r.io_read_kb >= 0) val = r.io_read_kb; break;
+            case "write": if (r.io_write_kb >= 0) val = r.io_write_kb; break;
+            case "threads": val = r.threads; break;
         }
-
-        if (val !== null) {
-            points.push({
-                x: new Date(r.timestamp.replace(" ", "T")),
-                y: val
-            });
-        }
-    }
-
-    return points;
+        return val !== null ? [{ x: new Date(r.timestamp.replace(" ", "T")), y: val }] : [];
+    });
 }
 
-function renderTimeline(points, label) {
+function renderTimeline(points, pid, metric) {
+    const comm = pidMap[pid]?.[0]?.comm || "";
+    const label = `${comm} — PID ${pid}`;
+    const badge = metricLabels[metric] || metric;
 
-    if (timelineChart)
-        timelineChart.destroy();
+    document.getElementById("chartLabel").textContent = label;
+    document.getElementById("chartBadge").textContent = badge;
 
-    timelineChart = new Chart(
-        document.getElementById("timelineChart"),
-        {
-            type: "line",
-            data: {
-                datasets: [{
-                    label,
-                    data: points,
-                    borderColor: "#007bff",
-                    fill: false,
-                    tension: 0.1
-                }]
+    const isDark = !document.body.classList.contains("light-mode");
+    const gridColor = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)";
+    const tickColor = isDark ? "#e8ecf4" : "#131722";
+
+    if (timelineChart) timelineChart.destroy();
+
+    timelineChart = new Chart(document.getElementById("timelineChart"), {
+        type: "line",
+        data: {
+            datasets: [{
+                label: badge,
+                data: points,
+                borderColor: "#4f8ef7",
+                backgroundColor: "rgba(79,142,247,0.08)",
+                fill: true,
+                tension: 0.3,
+                pointRadius: points.length > 300 ? 0 : 2,
+                pointHoverRadius: 4,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            animation: { duration: 400 },
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: "#1a1e28",
+                    borderColor: "#252a38",
+                    borderWidth: 1,
+                    titleColor: "#e8ecf4",
+                    bodyColor: "#8b92a5",
+                    padding: 10,
+                    titleFont: { family: "'JetBrains Mono'" },
+                    bodyFont: { family: "'JetBrains Mono'" }
+                }
             },
-            options: {
-                scales: {
-                    x: {
-                        type: "time",
-                        time: {
-                            unit: "second"
-                        }
-                    }
+            scales: {
+                x: {
+                    type: "time",
+                    time: { unit: "second" },
+                    ticks: { color: tickColor, font: { family: "'JetBrains Mono'", size: 10 } },
+                    grid: { color: gridColor },
+                    border: { color: "transparent" }
+                },
+                y: {
+                    ticks: { color: tickColor, font: { family: "'JetBrains Mono'", size: 10 } },
+                    grid: { color: gridColor },
+                    border: { color: "transparent" }
                 }
             }
         }
-    );
+    });
 }
 
-document.getElementById("fileInput")
-    .addEventListener("change", loadFile);
+document.getElementById("fileInput").addEventListener("change", loadFile);
+document.getElementById("pidSelect").addEventListener("change", updateChart);
+document.getElementById("metricSelect").addEventListener("change", updateChart);
 
 function loadFile(e) {
-
     const file = e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
-
-	reader.onload = function(ev) {
-
-	    const text = ev.target.result;
-
-	    const records = parseJSONL(text);
-
-	    pidMap = groupByPID(records);
-
-	    populatePIDSelect(pidMap);
-
-	    const pidFromURL = getPIDFromURL();
-	    if (pidFromURL && pidMap[pidFromURL]) {
-	        document.getElementById("pidSelect").value = pidFromURL;
-	    }
-
-	    updateChart();
-	};
-
-
+    reader.onload = function(ev) {
+        const text = ev.target.result;
+        localStorage.setItem("lastRecords", text);
+        const records = parseJSONL(text);
+        pidMap = groupByPID(records);
+        populatePIDSelect(pidMap);
+        const pidFromURL = getPIDFromURL();
+        if (pidFromURL && pidMap[pidFromURL]) {
+            document.getElementById("pidSelect").value = pidFromURL;
+        }
+        updateChart();
+    };
     reader.readAsText(file);
 }
 
-document.getElementById("pidSelect")
-    .addEventListener("change", updateChart);
-
-document.getElementById("metricSelect")
-    .addEventListener("change", updateChart);
-
-
 function updateChart() {
-
-	const pid = document.getElementById("pidSelect").value;
-	const metric = document.getElementById("metricSelect").value;
-
-	if (!pid || !pidMap[pid]) return;
-
-	const list = pidMap[pid];
-
-	const points = extractSeries(list, metric);
-
-	if (points.length === 0) {
-	    alert("No valid data for this metric");
-	    return;
-	}
-
-	const label = `${list[0].comm} (PID ${pid}) - ${metric}`;
-
-	renderTimeline(points, label);
+    const pid = document.getElementById("pidSelect").value;
+    const metric = document.getElementById("metricSelect").value;
+    if (!pid || !pidMap[pid]) return;
+    const points = extractSeries(pidMap[pid], metric);
+    if (!points.length) { alert("No valid data for this metric"); return; }
+    renderTimeline(points, pid, metric);
 }
 
-function loadDarkModePreference() {
-    const preference = localStorage.getItem("darkMode");
-    if (preference === "enabled") {
-        document.body.classList.add("dark-mode");
+window.addEventListener("load", () => {
+    const saved = localStorage.getItem("lastRecords");
+    if (saved) {
+        try {
+            const records = parseJSONL(saved);
+            pidMap = groupByPID(records);
+            populatePIDSelect(pidMap);
+            const pidFromURL = getPIDFromURL();
+            if (pidFromURL && pidMap[pidFromURL]) {
+                document.getElementById("pidSelect").value = pidFromURL;
+            }
+            updateChart();
+        } catch {}
     }
-}
-
-window.addEventListener("storage", function(event) {
-
-    if (event.key === "darkMode") {
-
-        if (event.newValue === "enabled") {
-            document.body.classList.add("dark-mode");
-        } else {
-            document.body.classList.remove("dark-mode");
-        }
-
-    }
-
 });
-
-document.addEventListener("DOMContentLoaded", loadDarkModePreference);
-
 </script>
-
-
 
 </body>
 </html>

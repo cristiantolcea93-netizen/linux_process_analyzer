@@ -334,7 +334,10 @@ body.light-mode .chart-card {
         </div>
         <div class="stat-card">
             <div class="stat-label">Time Range</div>
-            <div class="stat-value" id="m-range" style="font-size:13px; padding-top:6px;">—</div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:12px; line-height:2;">
+                <span style="color:var(--text-muted);">Start: </span><span id="m-start">—</span><br>
+                <span style="color:var(--text-muted);">End: &nbsp;&nbsp;</span><span id="m-end">—</span>
+            </div>
         </div>
     </div>
 
@@ -419,8 +422,9 @@ document.getElementById("fileInput").addEventListener("change", loadFile);
 
 function toggleLightMode() {
     document.body.classList.toggle("light-mode");
-    const lbl = document.getElementById("themeLbl");
-    lbl.textContent = document.body.classList.contains("light-mode") ? "Dark Mode" : "Light Mode";
+    const isLight = document.body.classList.contains("light-mode");
+    document.getElementById("themeLbl").textContent = isLight ? "Dark Mode" : "Light Mode";
+    localStorage.setItem("theme", isLight ? "light" : "dark");
     const saved = localStorage.getItem("lastMetrics");
     if (saved) { try { renderDashboard(JSON.parse(saved)); } catch {} }
 }
@@ -513,7 +517,8 @@ function renderMeta(meta) {
     document.getElementById("m-dur").textContent = meta.duration_sec + "s";
     document.getElementById("m-interval").textContent = "Interval: " + meta.interval_ms + "ms";
     document.getElementById("m-snap").textContent = meta.snapshots;
-    document.getElementById("m-range").textContent = meta.start_time + "  –  " + meta.end_time;
+    document.getElementById("m-start").textContent = meta.start_time;
+    document.getElementById("m-end").textContent = meta.end_time;
 }
 
 /* ── CHART DEFAULTS ── */
@@ -526,7 +531,7 @@ function getChartDefaults() {
     };
 }
 
-function buildChartOptions(list) {
+function buildChartOptions(list, metric) {
     const d = getChartDefaults();
     return {
         animation: { duration: 400 },
@@ -568,21 +573,21 @@ function buildChartOptions(list) {
                 border: { color: "transparent" }
             }
         },
-        onClick: chartClickHandler(list)
+        onClick: chartClickHandler(list, metric)
     };
 }
 
-function chartClickHandler(list) {
+function chartClickHandler(list, metric) {
     return (evt, elements) => {
         if (!elements.length) return;
         const index = elements[0].index;
         const process = list[index];
         showProcessInfo(process);
-        window.location.href = `records.html?pid=${process.pid}`;
+        window.location.href = `records.html?pid=${process.pid}&metric=${metric}`;
     };
 }
 
-function makeChart(id, list, label, valuesFn, color) {
+function makeChart(id, list, label, valuesFn, color, metric) {
     const labels = list.map(p => p.comm);
     const values = valuesFn(list);
     return new Chart(document.getElementById(id), {
@@ -591,60 +596,63 @@ function makeChart(id, list, label, valuesFn, color) {
             labels,
             datasets: [{ label, data: values, backgroundColor: color, borderRadius: 4, borderSkipped: false }]
         },
-        options: buildChartOptions(list)
+        options: buildChartOptions(list, metric)
     });
 }
 
 function renderCPU(list) {
     if (!list.length) return;
     if (cpuChart) cpuChart.destroy();
-    cpuChart = makeChart("cpuChart", list, "CPU %", l => l.map(p => p.cpu_avg_pct), "#4f8ef7");
+    cpuChart = makeChart("cpuChart", list, "CPU %", l => l.map(p => p.cpu_avg_pct), "#4f8ef7", "cpu");
 }
 
 function renderRSS(list) {
     if (!list.length) return;
     if (rssChart) rssChart.destroy();
-    rssChart = makeChart("rssChart", list, "RSS (MB)", l => l.map(p => p.rss_avg_kb / 1024), "#2dd4a0");
+    rssChart = makeChart("rssChart", list, "RSS (MB)", l => l.map(p => p.rss_avg_kb / 1024), "#2dd4a0", "rss");
 }
 
 function renderReadRate(list) {
     if (!list.length) return;
     if (readRateChart) readRateChart.destroy();
-    readRateChart = makeChart("readRateChart", list, "Read KB/s", l => l.map(p => p.read_rate_kbps), "#f0b429");
+    readRateChart = makeChart("readRateChart", list, "Read KB/s", l => l.map(p => p.read_rate_kbps), "#f0b429", "read");
 }
 
 function renderWriteRate(list) {
     if (!list.length) return;
     if (writeRateChart) writeRateChart.destroy();
-    writeRateChart = makeChart("writeRateChart", list, "Write KB/s", l => l.map(p => p.write_rate_kbps), "#f75f5f");
+    writeRateChart = makeChart("writeRateChart", list, "Write KB/s", l => l.map(p => p.write_rate_kbps), "#f75f5f", "write");
 }
 
 function renderRSSIncrease(list) {
     if (!list.length) return;
     if (rssIncreaseChart) rssIncreaseChart.destroy();
-    rssIncreaseChart = makeChart("rssIncreaseChart", list, "RSS Increase (MB)", l => l.map(p => p.rss_incr_kb / 1024), "#f0b429");
+    rssIncreaseChart = makeChart("rssIncreaseChart", list, "RSS Increase (MB)", l => l.map(p => p.rss_incr_kb / 1024), "#f0b429", "rss");
 }
 
 function renderRSSDelta(list) {
     if (!list.length) return;
     if (rssDeltaChart) rssDeltaChart.destroy();
-    rssDeltaChart = makeChart("rssDeltaChart", list, "RSS Delta (MB)", l => l.map(p => p.rss_delta_kb / 1024), "#f0b429");
+    rssDeltaChart = makeChart("rssDeltaChart", list, "RSS Delta (MB)", l => l.map(p => p.rss_delta_kb / 1024), "#f0b429", "rss");
 }
 
 function renderKbytesRead(list) {
     if (!list.length) return;
     if (kbytesReadChart) kbytesReadChart.destroy();
-    kbytesReadChart = makeChart("kbytesReadChart", list, "Disk Read (KB)", l => l.map(p => p.bytes_read_kb), "#9b6dff");
+    kbytesReadChart = makeChart("kbytesReadChart", list, "Disk Read (KB)", l => l.map(p => p.bytes_read_kb), "#9b6dff", "read");
 }
 
 function renderKbytesWritten(list) {
     if (!list.length) return;
     if (kbytesWrittenChart) kbytesWrittenChart.destroy();
-    kbytesWrittenChart = makeChart("kbytesWrittenChart", list, "Disk Write (KB)", l => l.map(p => p.written_bytes_kb), "#38bdf8");
+    kbytesWrittenChart = makeChart("kbytesWrittenChart", list, "Disk Write (KB)", l => l.map(p => p.written_bytes_kb), "#38bdf8", "write");
 }
 
 window.addEventListener("load", () => {
-    loadDarkModePreference();
+    if (localStorage.getItem("theme") === "light") {
+        document.body.classList.add("light-mode");
+        document.getElementById("themeLbl").textContent = "Dark Mode";
+    }
     const saved = localStorage.getItem("lastMetrics");
     if (saved) {
         try { renderDashboard(JSON.parse(saved)); } catch {}

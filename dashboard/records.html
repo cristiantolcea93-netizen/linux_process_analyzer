@@ -319,13 +319,18 @@ const metricLabels = {
 
 function toggleLightMode() {
     document.body.classList.toggle("light-mode");
-    document.getElementById("themeLbl").textContent =
-        document.body.classList.contains("light-mode") ? "Dark Mode" : "Light Mode";
+    const isLight = document.body.classList.contains("light-mode");
+    document.getElementById("themeLbl").textContent = isLight ? "Dark Mode" : "Light Mode";
+    localStorage.setItem("theme", isLight ? "light" : "dark");
     updateChart();
 }
 
 function getPIDFromURL() {
     return new URLSearchParams(window.location.search).get("pid");
+}
+
+function getMetricFromURL() {
+    return new URLSearchParams(window.location.search).get("metric");
 }
 
 function parseJSONL(text) {
@@ -410,14 +415,36 @@ function renderTimeline(points, pid, metric) {
                     bodyColor: "#8b92a5",
                     padding: 10,
                     titleFont: { family: "'JetBrains Mono'" },
-                    bodyFont: { family: "'JetBrains Mono'" }
+                    bodyFont: { family: "'JetBrains Mono'" },
+                    callbacks: {
+                        title: function(items) {
+                            const d = new Date(items[0].parsed.x);
+                            const hh = String(d.getHours()).padStart(2, "0");
+                            const mm = String(d.getMinutes()).padStart(2, "0");
+                            const ss = String(d.getSeconds()).padStart(2, "0");
+                            const ms = String(d.getMilliseconds()).padStart(3, "0");
+                            return `${hh}:${mm}:${ss}.${ms}`;
+                        }
+                    }
                 }
             },
             scales: {
                 x: {
                     type: "time",
                     time: { unit: "second" },
-                    ticks: { color: tickColor, font: { family: "'JetBrains Mono'", size: 10 } },
+                    ticks: {
+                        color: tickColor,
+                        font: { family: "'JetBrains Mono'", size: 10 },
+                        maxTicksLimit: 8,
+                        callback: function(value, index, ticks) {
+                            const d = new Date(ticks[index].value);
+                            const hh = String(d.getHours()).padStart(2, "0");
+                            const mm = String(d.getMinutes()).padStart(2, "0");
+                            const ss = String(d.getSeconds()).padStart(2, "0");
+                            const ms = String(d.getMilliseconds()).padStart(3, "0");
+                            return `${hh}:${mm}:${ss}.${ms}`;
+                        }
+                    },
                     grid: { color: gridColor },
                     border: { color: "transparent" }
                 },
@@ -449,6 +476,10 @@ function loadFile(e) {
         if (pidFromURL && pidMap[pidFromURL]) {
             document.getElementById("pidSelect").value = pidFromURL;
         }
+        const metricFromURL = getMetricFromURL();
+        if (metricFromURL) {
+            document.getElementById("metricSelect").value = metricFromURL;
+        }
         updateChart();
     };
     reader.readAsText(file);
@@ -464,6 +495,10 @@ function updateChart() {
 }
 
 window.addEventListener("load", () => {
+    if (localStorage.getItem("theme") === "light") {
+        document.body.classList.add("light-mode");
+        document.getElementById("themeLbl").textContent = "Dark Mode";
+    }
     const saved = localStorage.getItem("lastRecords");
     if (saved) {
         try {
@@ -473,6 +508,10 @@ window.addEventListener("load", () => {
             const pidFromURL = getPIDFromURL();
             if (pidFromURL && pidMap[pidFromURL]) {
                 document.getElementById("pidSelect").value = pidFromURL;
+            }
+            const metricFromURL = getMetricFromURL();
+            if (metricFromURL) {
+                document.getElementById("metricSelect").value = metricFromURL;
             }
             updateChart();
         } catch {}

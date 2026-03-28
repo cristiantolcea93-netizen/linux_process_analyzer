@@ -782,11 +782,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by average CPU usage:\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18.2f %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -808,11 +808,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by average RSS (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -832,11 +832,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by RSS increase since startup (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -856,11 +856,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by RSS delta since startup (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS delta (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "RSS delta (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -880,11 +880,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by bytes read from disk (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18lld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -904,11 +904,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by bytes written to disk (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18lld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -928,11 +928,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by disk read rate (KB/s):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18.2f %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -953,11 +953,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by disk write rate (KB/s):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18.2f %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -978,11 +978,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by new file descriptors:\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "NEW FDs", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "NEW FDs", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -1002,11 +1002,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by currently opened file descriptors:\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "FDs", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "FDs", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -1026,11 +1026,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by file descriptors delta\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Delta FDs", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "Delta FDs", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,

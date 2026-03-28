@@ -47,7 +47,9 @@ static void print_usage(const char *prog)
 	printf("  -f  --bytes_write <N>       Display N processes with the highest amount of KB written to disk\n");
 	printf("  -g  --read_rate <N>         Display N processes with the highest disk read rate (KB/s)\n");
 	printf("  -a  --write_rate <N>        Display N processes with the highest disk write rate (KB/s)\n");
+	printf("  -p  --opened_fds <N>        Display N processes with the highest number of opened file descriptors\n");
 	printf("  -m  --fds_increase <N>      Display N processes with the highest increase in opened file descriptors\n");
+	printf("  -o  --fds_delta <N>         Display N processes with the highest increase in opened file descriptors\n");
 	printf("  -k  --filter_by_pid <pid>   Comma-separated list of PIDs. If not provided all running processes are included\n");
 	printf("  -l  --filter_by_name <name> Comma-separated list of process names.If not provided all running processes are included\n");
 	printf("  -j  --delete_old_files      Delete the files stored during previous executions\n");
@@ -401,8 +403,10 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 				{ "bytes_read",			required_argument, 0, 'e' },
 				{ "bytes_write",		required_argument, 0, 'f' },
 				{ "read_rate",			required_argument, 0, 'g' },
-				{ "write_rate",			required_argument, 0, 'a' },
+				{ "write_rate", 		required_argument, 0, 'a' },
+				{ "opened_fds", 		required_argument, 0, 'p' },
 				{ "fds_increase", 		required_argument, 0, 'm' },
+				{ "fds_delta", 			required_argument, 0, 'o' },
 				{ "filter_by_pid",		required_argument, 0, 'k' },
 				{ "filter_by_name",		required_argument, 0, 'l' },
 				{ "delete_old_files",	no_argument, 	   0, 'j' },
@@ -412,7 +416,7 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 		};
 
 	int opt;
-	while ((opt = getopt_long(argc, argv, "i:n:c:r:s:d:e:f:g:a:m:k:l:jvh", long_opts, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "i:n:c:r:s:d:e:f:g:a:m:p:o:k:l:jvh", long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
 			if (parse_duration_ms(optarg, &cfg->interval_ms) != parse_args_ok)
@@ -557,6 +561,32 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 			}
 			break;
 
+		case 'p':
+			if (parse_integer_arg(optarg, &cfg->end_metrics_args.opened_fds_pids_to_display) != parse_args_ok)
+			{
+				fprintf(stderr, "Invalid opened FDs: %s\n", optarg);
+				ap_free_arguments(cfg);
+				return parse_args_error;
+			}
+			else
+			{
+				cfg->end_metrics_args.opened_fds_requested = true;
+			}
+			break;
+
+		case 'o':
+			if (parse_integer_arg(optarg, &cfg->end_metrics_args.fds_delta_pids_to_display) != parse_args_ok)
+			{
+				fprintf(stderr, "Invalid delta FDs: %s\n", optarg);
+				ap_free_arguments(cfg);
+				return parse_args_error;
+			}
+			else
+			{
+				cfg->end_metrics_args.fds_delta_requested = true;
+			}
+			break;
+
 		case 'k':
 			if (parse_filter_pid_list(optarg, cfg, filter_parse_pid) != parse_args_ok)
 			{
@@ -608,7 +638,9 @@ parse_args_status ap_parse_args(int argc, char **argv, ap_arguments *cfg)
 	   (true == cfg->end_metrics_args.bytes_write_requested) ||
 	   (true == cfg->end_metrics_args.read_rate_requested)   ||
 	   (true == cfg->end_metrics_args.write_rate_requested)  ||
-	   (true == cfg->end_metrics_args.fds_increase_requested))
+	   (true == cfg->end_metrics_args.fds_increase_requested)||
+	   (true == cfg->end_metrics_args.opened_fds_requested)  ||
+	   (true == cfg->end_metrics_args.fds_delta_requested))
 	{
 		// initialize process stats only if at least one metric was requested AND at least one output method was enabled in the configuration
 

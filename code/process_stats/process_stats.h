@@ -35,6 +35,12 @@ typedef struct{
 	bool fds_increase_requested;
 	int fds_increase_pids_to_display;
 
+	bool opened_fds_requested;
+	int  opened_fds_pids_to_display;
+
+	bool fds_delta_requested;
+	int fds_delta_pids_to_display;
+
 }process_stats_metrics_arguments;
 
 #ifdef UNIT_TEST
@@ -61,6 +67,7 @@ typedef struct{
 	/* FD data */
 	unsigned long initial_num_of_fds;
 	long fd_delta;
+	unsigned long current_num_of_fds;
 
 	unsigned long number_of_records;
 	/* calculated cpu data */

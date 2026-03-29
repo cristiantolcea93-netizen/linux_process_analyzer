@@ -26,6 +26,7 @@
 #endif
 
 #define COMPRESS_BUFFER_SIZE 65536   /* 64 KB */
+#define OUTPUT_STREAM_BUFFER_SIZE (64 * 1024)
 
 
 
@@ -33,8 +34,12 @@ static FILE* PSN_pfOutputFile = NULL;
 static FILE* PSN_pfOutputJsonlFile = NULL;
 static int g_lock_fd = -1;
 static DIR *dir = NULL;
+static long g_page_size_kb = 0;
 
 static void log_data(FILE* file, const char* fmt, ...);
+static void flush_output_files(void);
+static void configure_output_buffer(FILE *file);
+static void initialize_page_size_kb(void);
 static void print_timestamp(double *timestamp, char* hr_timestamp);
 static int is_numeric(const char *s);
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
@@ -42,7 +47,6 @@ static off_t get_file_size(const char *path);
 static void rotate_logs(char* filePath);
 static void rotate_and_reopen(FILE **pf, const char *path);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
-static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
 static long count_open_fds_for_pid(pid_t pid);
 static void read_fd(process_state_input_t* process_data);
 static void write_output_to_json(process_state_input_t* input);
@@ -178,7 +182,10 @@ static void rotate_and_reopen(FILE **pf, const char *path)
     if (!*pf)
     {
        fprintf(stderr,"fopen failed after rotate on %s", path);
+       return;
     }
+
+    configure_output_buffer(*pf);
 }
 
 static void log_data(FILE* file, const char* fmt, ...)
@@ -200,7 +207,48 @@ static void log_data(FILE* file, const char* fmt, ...)
 		va_start(args, fmt);
 		vfprintf(file, fmt, args);
 		va_end(args);
-		fflush(file);
+	}
+}
+
+static void flush_output_files(void)
+{
+	if (PSN_pfOutputFile)
+	{
+		fflush(PSN_pfOutputFile);
+	}
+
+	if (PSN_pfOutputJsonlFile)
+	{
+		fflush(PSN_pfOutputJsonlFile);
+	}
+}
+
+static void configure_output_buffer(FILE *file)
+{
+	if (file)
+	{
+		setvbuf(file, NULL, _IOFBF, OUTPUT_STREAM_BUFFER_SIZE);
+	}
+}
+
+static void initialize_page_size_kb(void)
+{
+	long page_size;
+
+	if (g_page_size_kb > 0)
+	{
+		return;
+	}
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size > 0)
+	{
+		g_page_size_kb = page_size / 1024;
+	}
+
+	if (g_page_size_kb <= 0)
+	{
+		g_page_size_kb = 4;
 	}
 }
 
@@ -297,46 +345,6 @@ static bool is_filtering_enabled(ap_pid_whitelist* whiteList)
 }
 
 
-static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
-{
-    char path[64], line[256];
-    snprintf(path, sizeof(path), "/proc/%d/status", pid);
-
-    bool threads_found = false;
-
-    proc_data->rssKb = -1;
-    proc_data->bo_is_rss_valid = false;
-    proc_data->threads = -1;
-
-    FILE *f = fopen(path, "r");
-    if (!f)
-    	return;
-
-
-    while (fgets(line, sizeof(line), f))
-    {
-        if (strncmp(line, "VmRSS:", 6) == 0)
-        {
-            if(sscanf(line + 6, "%ld", &proc_data->rssKb)==1)
-            {
-            	proc_data->bo_is_rss_valid = true;
-            }
-        }
-        else if (strncmp(line, "Threads:", 8) == 0)
-        {
-            if(sscanf(line + 8, "%d", &proc_data->threads)==1)
-            {
-            	threads_found = true;
-            }
-        }
-
-        if((true == proc_data->bo_is_rss_valid) && (true == threads_found))
-        	break;
-    }
-
-    fclose(f);
-}
-
 static long count_open_fds_for_pid(pid_t pid)
 {
 	char path[64];
@@ -386,7 +394,7 @@ static int read_proc_io(pid_t pid, process_state_input_t *p)
     char line[256];
     FILE *f;
 
-    snprintf(path, sizeof(path), "/proc/%d/io", pid);
+    snprintf(path, sizeof(path), PROC_PATH "/%d/io", pid);
     f = fopen(path, "r");
     if (!f)
         return -1;
@@ -417,6 +425,12 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 {
 	char path[64];
 	char buf[1024];
+	long rss_pages = -1;
+	int discard_int;
+	unsigned int discard_uint;
+	unsigned long discard_ulong;
+	unsigned long long discard_ullong;
+	long discard_long;
 
 	snprintf(path, sizeof(path), PROC_PATH "/%d/stat", pid);
 	FILE *f = fopen(path, "r");
@@ -440,6 +454,8 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 	if (!lparen || !rparen)
 		return -1;
 
+	initialize_page_size_kb();
+
 	memset(&proc_data->comm, 0x00, sizeof(proc_data->comm));
 	size_t len = rparen - lparen - 1;
 	if (len >= sizeof(proc_data->comm))
@@ -451,18 +467,45 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 	 */
 	int ret = sscanf(rparen + 2,
 			"%c %d "         /* state, ppid */
-			"%*d %*d %*d %*d %*u %*u %*u %*u %*u "
-			"%lu %lu ",       /* utime, stime */
+			"%d %d %d %d %u %u %u %u %u "
+			"%lu %lu "        /* utime, stime */
+			"%ld %ld %ld %ld "
+			"%d "             /* num_threads */
+			"%ld %llu %lu "
+			"%ld",            /* rss in pages */
 			&proc_data->state,//&state,
 			&proc_data->ppid,
+			&discard_int,
+			&discard_int,
+			&discard_int,
+			&discard_int,
+			&discard_uint,
+			&discard_uint,
+			&discard_uint,
+			&discard_uint,
+			&discard_uint,
 			&proc_data->utime,//&utime,
-			&proc_data->stime//&stime,
+			&proc_data->stime,//&stime,
+			&discard_long,
+			&discard_long,
+			&discard_long,
+			&discard_long,
+			&proc_data->threads,
+			&discard_long,
+			&discard_ullong,
+			&discard_ulong,
+			&rss_pages
 	);
-	if (ret != 4)
+	if (ret != 22)
 		return -1;
 
-
-	read_rss_status(pid, proc_data);
+	proc_data->rssKb = -1;
+	proc_data->bo_is_rss_valid = false;
+	if (rss_pages >= 0)
+	{
+		proc_data->rssKb = rss_pages * g_page_size_kb;
+		proc_data->bo_is_rss_valid = true;
+	}
 
 	ret = read_proc_io(pid, proc_data);
 
@@ -665,6 +708,7 @@ process_snapshot_status collect_snapshot(ap_pid_whitelist* whiteList)
 	}
 
 	log_data(PSN_pfOutputFile,"SNAPSHOT END ################# \n");
+	flush_output_files();
 	process_stats_snapshot_end();
 	return process_snapshot_success;
 }
@@ -683,6 +727,8 @@ process_snapshot_status process_snapshot_initialize(void)
 		fprintf(stderr,"failed to open /proc");
 		return process_snapshot_error;
 	}
+
+	initialize_page_size_kb();
 
 	if((false == isRawLogEnabled) && (false == isJsonlEnabled))
 	{
@@ -708,6 +754,7 @@ process_snapshot_status process_snapshot_initialize(void)
 			}
 			else
 			{
+				configure_output_buffer(PSN_pfOutputFile);
 				retVal = process_snapshot_success;
 			}
 		}
@@ -730,6 +777,7 @@ process_snapshot_status process_snapshot_initialize(void)
 			}
 			else
 			{
+				configure_output_buffer(PSN_pfOutputJsonlFile);
 				retVal = process_snapshot_success;
 			}
 		}

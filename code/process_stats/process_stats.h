@@ -32,6 +32,15 @@ typedef struct{
 	bool write_rate_requested;
 	int write_rate_pids_to_display;
 
+	bool fds_increase_requested;
+	int fds_increase_pids_to_display;
+
+	bool opened_fds_requested;
+	int  opened_fds_pids_to_display;
+
+	bool fds_delta_requested;
+	int fds_delta_pids_to_display;
+
 }process_stats_metrics_arguments;
 
 #ifdef UNIT_TEST
@@ -54,6 +63,12 @@ typedef struct{
 	unsigned long prev_cpu_ticks;
 	long prev_rss_kb;
 	double prev_timestamp;
+
+	/* FD data */
+	unsigned long initial_num_of_fds;
+	long fd_delta;
+	unsigned long current_num_of_fds;
+	bool bo_is_fd_initialized;
 
 	unsigned long number_of_records;
 	/* calculated cpu data */
@@ -103,6 +118,8 @@ typedef struct
 	unsigned long long write_kbytes;
 	bool bo_is_rss_valid;
 	bool bo_is_io_valid;
+	unsigned long  number_of_fds;
+	bool bo_is_fd_valid;
 }process_state_input_t;
 
 extern void process_stats_initialize(const char* prog);

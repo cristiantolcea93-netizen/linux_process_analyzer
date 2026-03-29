@@ -21,7 +21,9 @@
 #include "config.h"
 #include "compression_worker.h"
 
+#ifndef PROC_PATH
 #define PROC_PATH "/proc"
+#endif
 
 #define COMPRESS_BUFFER_SIZE 65536   /* 64 KB */
 
@@ -41,6 +43,8 @@ static void rotate_logs(char* filePath);
 static void rotate_and_reopen(FILE **pf, const char *path);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
+static long count_open_fds_for_pid(pid_t pid);
+static void read_fd(process_state_input_t* process_data);
 static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
 static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList);
@@ -333,6 +337,49 @@ static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
     fclose(f);
 }
 
+static long count_open_fds_for_pid(pid_t pid)
+{
+	char path[64];
+	struct dirent *entry;
+	DIR *fd_dir;
+	unsigned long count = 0;
+
+	snprintf(path, sizeof(path), PROC_PATH "/%d/fd", pid);
+	fd_dir = opendir(path);
+	if (fd_dir == NULL)
+		return -1;
+
+	while ((entry = readdir(fd_dir)) != NULL)
+	{
+		if (is_numeric(entry->d_name))
+		{
+			count++;
+		}
+	}
+
+	closedir(fd_dir);
+	return (long)count;
+}
+
+static void read_fd(process_state_input_t* process_data)
+{
+	long count;
+
+	if (process_data == NULL)
+		return;
+
+	process_data->bo_is_fd_valid = false;
+	process_data->number_of_fds = 0;
+
+	count = count_open_fds_for_pid(process_data->pid);
+
+	if (count < 0)
+		return;
+
+	process_data->number_of_fds = (unsigned long)count;
+	process_data->bo_is_fd_valid = true;
+}
+
 static int read_proc_io(pid_t pid, process_state_input_t *p)
 {
     char path[64];
@@ -452,7 +499,8 @@ static void write_output_to_json(process_state_input_t* input)
 		        "\"rss_kb\":%ld,"
 		        "\"io_read_kb\":%lld,"
 		        "\"io_write_kb\":%lld,"
-		        "\"threads\":%d"
+		        "\"threads\":%d,"
+				"\"fds\":%ld"
 		        "}\n",
 				input->h_r_timestamp,
 		        input->pid,
@@ -464,7 +512,8 @@ static void write_output_to_json(process_state_input_t* input)
 				input->rssKb,
 		        input->read_kbytes,
 		        input->write_kbytes,
-				input->threads
+				input->threads,
+				input->bo_is_fd_valid ? (long)input->number_of_fds : -1L
 		    );
 	}
 	else
@@ -602,9 +651,10 @@ process_snapshot_status collect_snapshot(ap_pid_whitelist* whiteList)
 				}
 			}
 
+			read_fd(&process_data);
 
-			log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d\n",
-					process_data.pid, process_data.comm, process_data.state, process_data.ppid, process_data.utime, process_data.stime, process_data.rssKb, process_data.read_kbytes, process_data.write_kbytes, process_data.threads);
+			log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d FD=%ld\n",
+					process_data.pid, process_data.comm, process_data.state, process_data.ppid, process_data.utime, process_data.stime, process_data.rssKb, process_data.read_kbytes, process_data.write_kbytes, process_data.threads, process_data.bo_is_fd_valid ? (long)process_data.number_of_fds : -1L);
 
 			//feed the data to process_stat
 			process_stats_update(&process_data);
@@ -732,4 +782,3 @@ void process_snapshot_deinit(void)
 		}
 	}
 }
-

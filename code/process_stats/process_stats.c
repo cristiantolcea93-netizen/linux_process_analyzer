@@ -35,6 +35,12 @@ typedef struct{
 	long prev_rss_kb;
 	double prev_timestamp;
 
+	/* FD data */
+	unsigned long initial_num_of_fds;
+	long fd_delta;
+	unsigned long current_num_of_fds;
+	bool bo_is_fd_initialized;
+
 	unsigned long number_of_records;
 	/* calculated cpu data */
 	double cpu_usage;          /* % */
@@ -68,8 +74,8 @@ typedef struct{
 
 typedef enum {
 	METRIC_DOUBLE,
-	METRIC_INT64,
-	METRIC_UINT64
+	METRIC_INT32,
+	METRIC_INT64
 } metric_value_type_t;
 
 typedef struct {
@@ -77,6 +83,7 @@ typedef struct {
 	const char *value_key;           // "e.g. cpu_average"
 	metric_value_type_t value_type;
 	double   (*get_double)(process_state_t *);
+	int32_t  (*get_int32)(process_state_t *);
 	int64_t  (*get_int64)(process_state_t *);
 } metric_desc_t;
 
@@ -99,6 +106,8 @@ static double get_avg_read_rate(process_state_t *ps);
 static int64_t get_total_write(process_state_t *ps);
 static double get_avg_write_rate(process_state_t *ps);
 static int64_t get_rss_delta(process_state_t *ps);
+static int32_t get_fds_delta(process_state_t *ps);
+static int64_t get_opened_fds(process_state_t *ps);
 
 typedef enum
 {
@@ -109,7 +118,10 @@ typedef enum
 	bytes_read = 4,
 	read_rate = 5,
 	written_bytes = 6,
-	write_rate = 7
+	write_rate = 7,
+	fds_increase = 8,
+	no_of_fds = 9,
+	fds_delta = 10
 }t_metrics;
 
 static const metric_desc_t g_metrics[] = {
@@ -160,6 +172,24 @@ static const metric_desc_t g_metrics[] = {
 			.value_key = "write_rate_kbps",
 			.value_type = METRIC_DOUBLE,
 			.get_double = get_avg_write_rate
+		},
+		{
+			.json_key = "fds_increase",
+			.value_key = "no_of_fds_increase",
+			.value_type = METRIC_INT32,
+			.get_int32 = get_fds_delta
+		},
+		{
+			.json_key = "opened_fds",
+			.value_key = "no_of_opened_fds",
+			.value_type = METRIC_INT64,
+			.get_int64 = get_opened_fds
+		},
+		{
+			.json_key = "fds_delta",
+			.value_key = "fds_delta",
+			.value_type = METRIC_INT32,
+			.get_int32 = get_fds_delta
 		}
 	};
 
@@ -284,6 +314,33 @@ static int compare_avg_write_rate(const void *a, const void *b)
 	return 0;
 }
 
+static int compare_fd_increase(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->fd_delta > pa->fd_delta) return 1;
+	if (pb->fd_delta < pa->fd_delta) return -1;
+	return 0;
+}
+
+static int compare_opened_fd(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (pb->current_num_of_fds > pa->current_num_of_fds) return 1;
+	if (pb->current_num_of_fds < pa->current_num_of_fds) return -1;
+	return 0;
+}
+
+static int compare_fd_delta(const void *a, const void *b)
+{
+	const process_state_t *pa = *(const process_state_t**)a;
+	const process_state_t *pb = *(const process_state_t**)b;
+	if (labs(pb->fd_delta) > labs(pa->fd_delta)) return 1;
+	if (labs(pb->fd_delta) < labs(pa->fd_delta)) return -1;
+	return 0;
+}
+
 static void calculate_io_data(process_state_input_t* input,process_state_t* proc_state)
 {
 	if(true == input->bo_is_io_valid)
@@ -339,6 +396,27 @@ static void calculate_rss_data(process_state_input_t* input, process_state_t* pr
 		//calculate rss variation
 		proc_state->rss_variation_since_startup = proc_state->rss_kb - proc_state->rss_initial_kb;
 		proc_state->num_of_rss_records++;
+	}
+}
+
+static void calculate_fds_delta(process_state_input_t* input, process_state_t* proc_state)
+{
+	if(true == input->bo_is_fd_valid)
+	{
+		//set current number of fds
+		proc_state->current_num_of_fds = input->number_of_fds;
+
+		if(false == proc_state->bo_is_fd_initialized)
+		{
+			//first valid sample for this process
+			proc_state->initial_num_of_fds = input->number_of_fds;
+			proc_state->bo_is_fd_initialized = true;
+		}
+		else
+		{
+			//not the first valid sample, calculate delta
+			proc_state->fd_delta = input->number_of_fds - proc_state->initial_num_of_fds;
+		}
 	}
 }
 
@@ -489,11 +567,17 @@ static void write_metric_block_json(const metric_desc_t *m, process_state_t **ar
 						m->value_key,
 						m->get_double(ps)
 					);
-				} else {
+				} else if(m->value_type == METRIC_INT64){
 					fprintf(pfJsonOutput,
 						"\t\t\t\"%s\": %lld,\n",
 						m->value_key,
 						(long long)m->get_int64(ps)
+					);
+				} else {
+					fprintf(pfJsonOutput,
+							"\t\t\t\"%s\": %ld,\n",
+							m->value_key,
+							(long)m->get_int32(ps)
 					);
 				}
 
@@ -606,7 +690,15 @@ static int64_t get_rss_delta(process_state_t *ps)
 	return ps->rss_variation_since_startup;
 }
 
+static int32_t get_fds_delta(process_state_t *ps)
+{
+	return ps->fd_delta;
+}
 
+static int64_t get_opened_fds(process_state_t *ps)
+{
+	return ps->current_num_of_fds;
+}
 
 void process_stats_snapshot_end(void)
 {
@@ -695,11 +787,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by average CPU usage:\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "AVG CPU%", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18.2f %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -721,11 +813,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by average RSS (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "AVG RSS (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -745,11 +837,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by RSS increase since startup (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "RSS increase (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -769,11 +861,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by RSS delta since startup (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RSS delta (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "RSS delta (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8ld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -793,11 +885,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by bytes read from disk (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes read (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18lld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -817,11 +909,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by bytes written to disk (KB):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "Bytes written (KB)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8lld %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18lld %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -841,11 +933,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by disk read rate (KB/s):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "RR(KB/s)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18.2f %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -866,11 +958,11 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 			if(true == config_get_metrics_console_enabled())
 			{
 				printf("\nTop %d processes by disk write rate (KB/s):\n", n);
-				printf("%-6s %-20s %-6s %-12s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "WR(KB/s)", "THREADS", "RECORDS");
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %8.2f %8d %15lu\n",
+					printf("%-6d %-20.20s %-6c %-18.2f %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -880,6 +972,79 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 				}
 			}
 			write_metric_block_json(&g_metrics[write_rate],arr,n);
+		}
+
+		if(true == args->fds_increase_requested)
+		{
+			int n = args->fds_increase_pids_to_display < count ? args->fds_increase_pids_to_display : count;
+			qsort(arr, count, sizeof(process_state_t*), compare_fd_increase);
+
+
+			if(true == config_get_metrics_console_enabled())
+			{
+				printf("\nTop %d processes by new file descriptors:\n", n);
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "NEW FDs", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->fd_delta,
+							ps->threads,
+							ps->number_of_records);
+				}
+			}
+			write_metric_block_json(&g_metrics[fds_increase],arr,n);
+		}
+
+		if(true == args->opened_fds_requested)
+		{
+			int n = args->opened_fds_pids_to_display < count ? args->opened_fds_pids_to_display : count;
+			qsort(arr, count, sizeof(process_state_t*), compare_opened_fd);
+
+			if(true == config_get_metrics_console_enabled())
+			{
+				printf("\nTop %d processes by currently opened file descriptors:\n", n);
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "FDs", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->current_num_of_fds,
+							ps->threads,
+							ps->number_of_records);
+				}
+			}
+			write_metric_block_json(&g_metrics[no_of_fds],arr,n);
+		}
+
+		if(true == args->fds_delta_requested)
+		{
+			int n = args->fds_delta_pids_to_display < count ? args->fds_delta_pids_to_display : count;
+			qsort(arr, count, sizeof(process_state_t*), compare_fd_delta);
+
+			if(true == config_get_metrics_console_enabled())
+			{
+				printf("\nTop %d processes by file descriptors delta\n", n);
+				printf("%-6s %-20s %-6s %-18s %-8s %-15s\n","PID", "COMM", "STATE", "Delta FDs", "THREADS", "RECORDS");
+				for (i = 0; i < n; i++)
+				{
+					ps = arr[i];
+					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
+							ps->pid,
+							ps->comm,
+							ps->state,
+							ps->fd_delta,
+							ps->threads,
+							ps->number_of_records);
+				}
+			}
+			write_metric_block_json(&g_metrics[fds_delta],arr,n);
 		}
 
 		free(arr);
@@ -949,8 +1114,8 @@ void process_stats_update(process_state_input_t* input)
 
 			strncpy(proc_state->comm,input->comm,sizeof(proc_state->comm));
 
-			proc_state->number_of_records++;
-
+			// calculate file descriptor delta
+			calculate_fds_delta(input, proc_state);
 
 			//calculate rss data
 			calculate_rss_data(input, proc_state);
@@ -961,6 +1126,8 @@ void process_stats_update(process_state_input_t* input)
 			proc_state->prev_timestamp = input->timestamp;
 
 			proc_state->seen_in_snapshot = true;
+
+			proc_state->number_of_records++;
 		}
 		else
 		{

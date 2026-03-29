@@ -13,7 +13,7 @@
 
 `process_analyzer` is a lightweight Linux command-line tool written in C that periodically samples process information from `/proc` and provides aggregated statistics at the end of execution.
 
-The tool is designed for **low-overhead monitoring**, accurate **time-based calculations**, and **post-run analysis** of CPU, memory (RSS), and disk I/O usage per process. 
+The tool is designed for **low-overhead monitoring**, accurate **time-based calculations**, and **post-run analysis** of CPU, memory (RSS), disk I/O, and file descriptor usage per process. 
 It focuses on **low overhead and long-term observation** rather than deep profiling.
 
 **Repository Mirrors**
@@ -37,6 +37,10 @@ Updates are pushed to both locations when possible.
 - Disk I/O metrics per process:
   - Total bytes read / written
   - Average disk read/write rate (KB/s)
+- File descriptor metrics per process:
+  - Currently opened file descriptors
+  - File descriptors opened since startup
+  - File descriptor delta since startup
 - Optional PID and process-name filtering to monitor only selected processes
 - Snapshot logging with log rotation
 - Graceful shutdown on `CTRL+C` or `SIGTERM`
@@ -118,6 +122,7 @@ and allows interactive exploration of collected data.
 At each sampling interval, the tool:
 
 - Reads process data from `/proc/[pid]/stat`, `/proc/[pid]/status`, and `/proc/[pid]/io`
+- Reads file descriptor counts from `/proc/[pid]/fd`
 - Stores a snapshot of all running processes (or only selected PIDs/process names when filtering is enabled)
 - Accumulates statistics over time using **monotonic timestamps**
 - Designed to minimize per-sample overhead even at small intervals (tens of milliseconds)
@@ -166,7 +171,8 @@ Then run:
     -n 100 \
     -c 10 -r 10 -s 10 -d 10 \
     -e 10 -f 10 \
-    -g 10 -a 10
+    -g 10 -a 10 \
+    -p 10 -m 10 -o 10
 ```
 ### Requirements
 
@@ -288,6 +294,9 @@ The following options are **required**:
 -f, --bytes_write <N>       Top N by disk write (KB)
 -g, --read_rate <N>         Top N by read rate (KB/s)
 -a, --write_rate <N>        Top N by write rate (KB/s)
+-p, --opened_fds <N>        Top N by currently opened file descriptors
+-m, --fds_increase <N>      Top N by file descriptors opened since startup
+-o, --fds_delta <N>         Top N by file descriptor delta since startup
 -k, --filter_by_pid <pid>   Comma-separated list of PIDs to include in the analysis
 -l, --filter_by_name <name> Comma-separated list of process names to include in the analysis
 
@@ -307,6 +316,7 @@ The following options are **required**:
     -c 10 -r 10 -s 10 -d 10 \
     -e 10 -f 10 \
     -g 15 -a 15 \
+    -p 10 -m 10 -o 10 \
     -j
 ```
 
@@ -362,8 +372,8 @@ Each sampling iteration is logged as a snapshot.
 
 ```
 [2026-01-11 19:19:49.611] SNAPSHOT START #################
-PID=1548 COMM=systemd STATE=S PPID=1 UTIME=71 STIME=21 RSS(KB)=12592 IOR(KB)=0 IOW(KB)=0 THREADS=1
-PID=1558 COMM=pipewire STATE=S PPID=1548 UTIME=2514 STIME=2346 RSS(KB)=16776 IOR(KB)=1180 IOW(KB)=0 THREADS=3
+PID=1548 COMM=systemd STATE=S PPID=1 UTIME=71 STIME=21 RSS(KB)=12592 IOR(KB)=0 IOW(KB)=0 THREADS=1 FD=4
+PID=1558 COMM=pipewire STATE=S PPID=1548 UTIME=2514 STIME=2346 RSS(KB)=16776 IOR(KB)=1180 IOW(KB)=0 THREADS=3 FD=18
 ...
 SNAPSHOT END #################
 ```
@@ -371,9 +381,9 @@ SNAPSHOT END #################
 ### JSONL format
 
 ```
-{"timestamp":"2026-01-19 21:47:41.677","pid":2603,"comm":"eclipse","state":"S","ppid":1800,"utime":7,"stime":1,"rss_kb":23376,"io_read_kb":640,"io_write_kb":0,"threads":5}
-{"timestamp":"2026-01-19 21:47:41.677","pid":2618,"comm":"java","state":"S","ppid":2603,"utime":19907,"stime":1161,"rss_kb":1129624,"io_read_kb":212404,"io_write_kb":16744,"threads":70}
-{"timestamp":"2026-01-19 21:47:41.677","pid":2677,"comm":"nautilus","state":"S","ppid":1515,"utime":204,"stime":32,"rss_kb":178828,"io_read_kb":6132,"io_write_kb":80,"threads":19}
+{"timestamp":"2026-01-19 21:47:41.677","pid":2603,"comm":"eclipse","state":"S","ppid":1800,"utime":7,"stime":1,"rss_kb":23376,"io_read_kb":640,"io_write_kb":0,"threads":5,"fds":112}
+{"timestamp":"2026-01-19 21:47:41.677","pid":2618,"comm":"java","state":"S","ppid":2603,"utime":19907,"stime":1161,"rss_kb":1129624,"io_read_kb":212404,"io_write_kb":16744,"threads":70,"fds":196}
+{"timestamp":"2026-01-19 21:47:41.677","pid":2677,"comm":"nautilus","state":"S","ppid":1515,"utime":204,"stime":32,"rss_kb":178828,"io_read_kb":6132,"io_write_kb":80,"threads":19,"fds":31}
 ```
 
 ---

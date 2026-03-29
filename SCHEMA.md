@@ -74,7 +74,10 @@ Each metric is represented as an **array of process entries**, typically sorted 
   "kbytes_read": [ ... ],
   "written_kbytes": [ ... ],
   "read_rate": [ ... ],
-  "write_rate": [ ... ]
+  "write_rate": [ ... ],
+  "fds_increase": [ ... ],
+  "opened_fds": [ ... ],
+  "fds_delta": [ ... ]
 }
 ```
 
@@ -175,6 +178,36 @@ Average disk write rate.
 | Field | Type | Description |
 |-----|-----|-------------|
 | write_rate_kbps | number | Average write rate (KB/s) |
+
+---
+
+### `fds_increase`
+
+Increase in opened file descriptors relative to the first observed sample.
+
+| Field | Type | Description |
+|-----|-----|-------------|
+| no_of_fds_increase | integer | Opened file descriptor increase since first sample |
+
+---
+
+### `opened_fds`
+
+Number of currently opened file descriptors for the process.
+
+| Field | Type | Description |
+|-----|-----|-------------|
+| no_of_opened_fds | integer | Opened file descriptor count in the latest sample |
+
+---
+
+### `fds_delta`
+
+Difference between the latest and first observed file descriptor count.
+
+| Field | Type | Description |
+|-----|-----|-------------|
+| fds_delta | integer | File descriptor delta (can be negative) |
 
 ---
 

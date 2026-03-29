@@ -175,6 +175,33 @@ void test_multiple_metrics(void)
     ap_free_arguments(&cfg);
 }
 
+void test_fd_metrics(void)
+{
+    char *argv[] = {
+        "process_analyzer",
+        "-p", "8",
+        "-m", "6",
+        "-o", "4",
+        "-i", "100ms",
+        "-n", "10",
+        NULL
+    };
+
+    ap_arguments cfg;
+    reset_cfg(&cfg);
+
+    parse_args_status ret = run_parse(11, argv, &cfg);
+
+    TEST_ASSERT_EQUAL(parse_args_ok, ret);
+    TEST_ASSERT_TRUE(cfg.end_metrics_args.opened_fds_requested);
+    TEST_ASSERT_TRUE(cfg.end_metrics_args.fds_increase_requested);
+    TEST_ASSERT_TRUE(cfg.end_metrics_args.fds_delta_requested);
+    TEST_ASSERT_EQUAL(8, cfg.end_metrics_args.opened_fds_pids_to_display);
+    TEST_ASSERT_EQUAL(6, cfg.end_metrics_args.fds_increase_pids_to_display);
+    TEST_ASSERT_EQUAL(4, cfg.end_metrics_args.fds_delta_pids_to_display);
+    ap_free_arguments(&cfg);
+}
+
 
 /* Infinity count */
 void test_infinity_count(void)
@@ -458,6 +485,7 @@ int main(void)
     RUN_TEST(test_long_options);
     RUN_TEST(test_cpu_metric);
     RUN_TEST(test_multiple_metrics);
+    RUN_TEST(test_fd_metrics);
     RUN_TEST(test_infinity_count);
     RUN_TEST(test_filter_by_pid_single);
     RUN_TEST(test_filter_by_pid_list);

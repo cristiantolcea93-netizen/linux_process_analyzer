@@ -45,8 +45,8 @@ EOF
 export PROCESS_ANALYZER_CONFIG="$TEST_ROOT/configuration.config"
 
 $BIN \
-    -i 10ms \
-    -n 200 \
+    -i 30ms \
+    -n 400 \
     -j \
     > /dev/null
 

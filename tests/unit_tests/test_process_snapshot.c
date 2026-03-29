@@ -2,16 +2,41 @@
 #include "process_snapshot.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <dirent.h>
+#include <errno.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include "../../code/process_stats/process_stats.h"
 #include "../../code/config/config.h"
 
-#include "../../code/process_snapshot/process_snapshot.c"
+#define TEST_PROC_ROOT "/tmp/process_snapshot_unit_proc"
 
-#include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
+static DIR *(*real_opendir_fn)(const char *) = opendir;
+static const char *g_mock_opendir_path = NULL;
+static int g_mock_opendir_errno = 0;
+
+static DIR *mockable_opendir(const char *path)
+{
+    if ((g_mock_opendir_path != NULL) &&
+        (strcmp(path, g_mock_opendir_path) == 0))
+    {
+        errno = g_mock_opendir_errno;
+        return NULL;
+    }
+
+    return real_opendir_fn(path);
+}
+
+#define PROC_PATH TEST_PROC_ROOT
+#define opendir mockable_opendir
+#include "../../code/process_snapshot/process_snapshot.c"
+#undef opendir
+#undef PROC_PATH
 
 // ---- MOCK CONFIG ----
 
@@ -66,8 +91,81 @@ void process_stats_snapshot_end(void)
 {
 }
 
-void setUp(void) {}
-void tearDown(void) {}
+static void remove_tree_if_exists(const char *path)
+{
+    DIR *dir_handle = opendir(path);
+    struct dirent *entry;
+
+    if (dir_handle == NULL)
+    {
+        unlink(path);
+        rmdir(path);
+        return;
+    }
+
+    while ((entry = readdir(dir_handle)) != NULL)
+    {
+        char child_path[512];
+
+        if ((strcmp(entry->d_name, ".") == 0) ||
+            (strcmp(entry->d_name, "..") == 0))
+        {
+            continue;
+        }
+
+        snprintf(child_path, sizeof(child_path), "%s/%s", path, entry->d_name);
+        remove_tree_if_exists(child_path);
+    }
+
+    closedir(dir_handle);
+    rmdir(path);
+}
+
+static void ensure_dir_exists(const char *path, mode_t mode)
+{
+    int ret = mkdir(path, mode);
+
+    if ((ret != 0) && (errno != EEXIST))
+    {
+        TEST_FAIL_MESSAGE("Failed to create test directory");
+    }
+}
+
+static void create_empty_file(const char *path)
+{
+    int fd = open(path, O_CREAT | O_TRUNC | O_RDWR, 0600);
+
+    TEST_ASSERT_TRUE(fd >= 0);
+    close(fd);
+}
+
+static void create_fd_fixture(pid_t pid)
+{
+    char path[512];
+
+    ensure_dir_exists(TEST_PROC_ROOT, 0700);
+
+    snprintf(path, sizeof(path), "%s/%d", TEST_PROC_ROOT, pid);
+    ensure_dir_exists(path, 0700);
+
+    snprintf(path, sizeof(path), "%s/%d/fd", TEST_PROC_ROOT, pid);
+    ensure_dir_exists(path, 0700);
+}
+
+void setUp(void)
+{
+    g_mock_opendir_path = NULL;
+    g_mock_opendir_errno = 0;
+    remove_tree_if_exists(TEST_PROC_ROOT);
+    ensure_dir_exists(TEST_PROC_ROOT, 0700);
+}
+
+void tearDown(void)
+{
+    g_mock_opendir_path = NULL;
+    g_mock_opendir_errno = 0;
+    remove_tree_if_exists(TEST_PROC_ROOT);
+}
 
 void test_is_numeric(void)
 {
@@ -209,6 +307,53 @@ void test_if_filtering_enabled(void)
 	TEST_ASSERT_TRUE(is_filtering_enabled(&whitelist));
 }
 
+void test_count_open_fds_for_pid_returns_correct_count(void)
+{
+    const pid_t pid = 4242;
+    char path[512];
+
+    create_fd_fixture(pid);
+
+    snprintf(path, sizeof(path), "%s/%d/fd/0", TEST_PROC_ROOT, pid);
+    create_empty_file(path);
+
+    snprintf(path, sizeof(path), "%s/%d/fd/1", TEST_PROC_ROOT, pid);
+    create_empty_file(path);
+
+    snprintf(path, sizeof(path), "%s/%d/fd/25", TEST_PROC_ROOT, pid);
+    create_empty_file(path);
+
+    snprintf(path, sizeof(path), "%s/%d/fd/not_an_fd", TEST_PROC_ROOT, pid);
+    create_empty_file(path);
+
+    TEST_ASSERT_EQUAL(3, count_open_fds_for_pid(pid));
+}
+
+void test_count_open_fds_for_pid_returns_minus_one_for_invalid_pid(void)
+{
+    TEST_ASSERT_EQUAL(-1, count_open_fds_for_pid(99999));
+}
+
+void test_count_open_fds_for_pid_handles_permission_denied(void)
+{
+    const pid_t pid = 5151;
+    char path[512];
+
+    create_fd_fixture(pid);
+
+    snprintf(path, sizeof(path), "%s/%d/fd/0", TEST_PROC_ROOT, pid);
+    create_empty_file(path);
+
+    snprintf(path, sizeof(path), "%s/%d/fd", TEST_PROC_ROOT, pid);
+    g_mock_opendir_path = path;
+    g_mock_opendir_errno = EACCES;
+
+    TEST_ASSERT_EQUAL(-1, count_open_fds_for_pid(pid));
+
+    g_mock_opendir_path = NULL;
+    g_mock_opendir_errno = 0;
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -220,11 +365,12 @@ int main(void)
     RUN_TEST(test_is_pid_in_filter);
     RUN_TEST(test_is_comm_in_filter);
     RUN_TEST(test_if_filtering_enabled);
+    RUN_TEST(test_count_open_fds_for_pid_returns_correct_count);
+    RUN_TEST(test_count_open_fds_for_pid_returns_minus_one_for_invalid_pid);
+    RUN_TEST(test_count_open_fds_for_pid_handles_permission_denied);
 
     return UNITY_END();
 }
-
-
 
 
 

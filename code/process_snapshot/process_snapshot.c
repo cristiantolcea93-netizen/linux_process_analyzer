@@ -21,7 +21,9 @@
 #include "config.h"
 #include "compression_worker.h"
 
+#ifndef PROC_PATH
 #define PROC_PATH "/proc"
+#endif
 
 #define COMPRESS_BUFFER_SIZE 65536   /* 64 KB */
 
@@ -41,6 +43,7 @@ static void rotate_logs(char* filePath);
 static void rotate_and_reopen(FILE **pf, const char *path);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static void read_rss_status(pid_t pid, process_state_input_t *proc_data);
+static long count_open_fds_for_pid(pid_t pid);
 static void read_fd(pid_t pid, unsigned long *num_of_fds);
 static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
@@ -334,22 +337,17 @@ static void read_rss_status(pid_t pid, process_state_input_t *proc_data)
     fclose(f);
 }
 
-static void read_fd(pid_t pid, unsigned long *num_of_fds)
+static long count_open_fds_for_pid(pid_t pid)
 {
 	char path[64];
 	struct dirent *entry;
 	DIR *fd_dir;
 	unsigned long count = 0;
 
-	if (num_of_fds == NULL)
-		return;
-
-	*num_of_fds = 0;
-
 	snprintf(path, sizeof(path), PROC_PATH "/%d/fd", pid);
 	fd_dir = opendir(path);
 	if (fd_dir == NULL)
-		return;
+		return -1;
 
 	while ((entry = readdir(fd_dir)) != NULL)
 	{
@@ -360,7 +358,25 @@ static void read_fd(pid_t pid, unsigned long *num_of_fds)
 	}
 
 	closedir(fd_dir);
-	*num_of_fds = count;
+	return (long)count;
+}
+
+static void read_fd(pid_t pid, unsigned long *num_of_fds)
+{
+	long count;
+
+	*num_of_fds = -1;
+
+	if (num_of_fds == NULL)
+		return;
+
+
+
+	count = count_open_fds_for_pid(pid);
+	if (count < 0)
+		return;
+
+	*num_of_fds = (unsigned long)count;
 }
 
 static int read_proc_io(pid_t pid, process_state_input_t *p)
@@ -636,7 +652,7 @@ process_snapshot_status collect_snapshot(ap_pid_whitelist* whiteList)
 
 			read_fd(process_data.pid, &process_data.number_of_fds);
 
-			log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d FD=%u\n",
+			log_data(PSN_pfOutputFile,"PID=%d COMM=%s STATE=%c PPID=%d UTIME=%lu STIME=%lu RSS(KB)=%ld IOR(KB)=%lld IOW(KB)=%lld THREADS=%d FD=%lu\n",
 					process_data.pid, process_data.comm, process_data.state, process_data.ppid, process_data.utime, process_data.stime, process_data.rssKb, process_data.read_kbytes, process_data.write_kbytes, process_data.threads, process_data.number_of_fds);
 
 			//feed the data to process_stat

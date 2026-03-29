@@ -152,6 +152,25 @@ static void create_fd_fixture(pid_t pid)
     ensure_dir_exists(path, 0700);
 }
 
+static void create_proc_fixture(pid_t pid)
+{
+    char path[512];
+
+    ensure_dir_exists(TEST_PROC_ROOT, 0700);
+
+    snprintf(path, sizeof(path), "%s/%d", TEST_PROC_ROOT, pid);
+    ensure_dir_exists(path, 0700);
+}
+
+static void create_text_file(const char *path, const char *content)
+{
+    FILE *file = fopen(path, "w");
+
+    TEST_ASSERT_NOT_NULL(file);
+    fputs(content, file);
+    fclose(file);
+}
+
 void setUp(void)
 {
     g_mock_opendir_path = NULL;
@@ -403,6 +422,53 @@ void test_read_fd_clears_value_when_directory_cannot_be_read(void)
     g_mock_opendir_errno = 0;
 }
 
+void test_read_proc_stat_reads_rss_threads_and_io_without_status_file(void)
+{
+    const pid_t pid = 8181;
+    char path[512];
+    long expected_rss_kb;
+    long page_size = sysconf(_SC_PAGESIZE);
+    process_state_input_t process_data;
+
+    if (page_size <= 0)
+    {
+        page_size = 4096;
+    }
+
+    create_proc_fixture(pid);
+
+    snprintf(path, sizeof(path), "%s/%d/stat", TEST_PROC_ROOT, pid);
+    create_text_file(
+        path,
+        "8181 (demo_proc) R 1 2 3 4 5 6 7 8 9 10 110 220 0 0 0 0 7 0 12345 4096 25 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n");
+
+    snprintf(path, sizeof(path), "%s/%d/io", TEST_PROC_ROOT, pid);
+    create_text_file(
+        path,
+        "read_bytes: 4096\n"
+        "write_bytes: 8192\n");
+
+    memset(&process_data, 0, sizeof(process_data));
+    process_data.pid = pid;
+
+    TEST_ASSERT_EQUAL(0, read_proc_stat(pid, &process_data));
+
+    expected_rss_kb = 25 * (page_size / 1024);
+
+    TEST_ASSERT_EQUAL(pid, process_data.pid);
+    TEST_ASSERT_EQUAL_STRING("demo_proc", process_data.comm);
+    TEST_ASSERT_EQUAL('R', process_data.state);
+    TEST_ASSERT_EQUAL(1, process_data.ppid);
+    TEST_ASSERT_EQUAL(110, process_data.utime);
+    TEST_ASSERT_EQUAL(220, process_data.stime);
+    TEST_ASSERT_TRUE(process_data.bo_is_rss_valid);
+    TEST_ASSERT_EQUAL(7, process_data.threads);
+    TEST_ASSERT_EQUAL(expected_rss_kb, process_data.rssKb);
+    TEST_ASSERT_TRUE(process_data.bo_is_io_valid);
+    TEST_ASSERT_EQUAL_UINT64(4, process_data.read_kbytes);
+    TEST_ASSERT_EQUAL_UINT64(8, process_data.write_kbytes);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -419,8 +485,7 @@ int main(void)
     RUN_TEST(test_count_open_fds_for_pid_handles_permission_denied);
     RUN_TEST(test_read_fd_sets_valid_flag_and_fd_count);
     RUN_TEST(test_read_fd_clears_value_when_directory_cannot_be_read);
+    RUN_TEST(test_read_proc_stat_reads_rss_threads_and_io_without_status_file);
 
     return UNITY_END();
 }
-
-

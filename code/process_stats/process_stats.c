@@ -97,6 +97,8 @@ static uint64_t g_number_of_snapshots = 0;
 static char h_r_initial_timestamp[64];
 static char h_r_last_timestamp[64];
 static bool boIsFirstJsonMetric;
+static long g_clock_ticks_per_second = 100;
+static long g_online_cpu_count = 1;
 
 static double get_avg_cpu(process_state_t *ps);
 static int64_t get_avg_rss(process_state_t *ps);
@@ -234,10 +236,7 @@ static double compute_cpu_usage(
     if (delta_time <= 0.0)
         return 0.0;
 
-    long hz = sysconf(_SC_CLK_TCK);
-    long cpus = sysconf(_SC_NPROCESSORS_ONLN);
-
-    return (delta_ticks / hz) / delta_time / cpus * 100.0;
+    return (delta_ticks / g_clock_ticks_per_second) / delta_time / g_online_cpu_count * 100.0;
 }
 
 
@@ -730,6 +729,19 @@ void process_stats_snapshot_end(void)
 
 void process_stats_initialize(const char* prog)
 {
+	long hz = sysconf(_SC_CLK_TCK);
+	long cpus = sysconf(_SC_NPROCESSORS_ONLN);
+
+	if (hz > 0)
+	{
+		g_clock_ticks_per_second = hz;
+	}
+
+	if (cpus > 0)
+	{
+		g_online_cpu_count = cpus;
+	}
+
 	is_module_initialized = true;
 	prog_name = prog;
 }

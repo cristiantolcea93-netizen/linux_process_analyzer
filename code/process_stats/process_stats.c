@@ -39,6 +39,7 @@ typedef struct{
 	unsigned long initial_num_of_fds;
 	long fd_delta;
 	unsigned long current_num_of_fds;
+	bool bo_is_fd_initialized;
 
 	unsigned long number_of_records;
 	/* calculated cpu data */
@@ -400,18 +401,22 @@ static void calculate_rss_data(process_state_input_t* input, process_state_t* pr
 
 static void calculate_fds_delta(process_state_input_t* input, process_state_t* proc_state)
 {
-	//set current number of fds
-	proc_state->current_num_of_fds = input->number_of_fds;
+	if(true == input->bo_is_fd_valid)
+	{
+		//set current number of fds
+		proc_state->current_num_of_fds = input->number_of_fds;
 
-	if(0 == proc_state->number_of_records)
-	{
-		//first sample for this process
-		proc_state->initial_num_of_fds = input->number_of_fds;
-	}
-	else
-	{
-		//not the first sample, calculate delta
-		proc_state->fd_delta = input->number_of_fds - proc_state->initial_num_of_fds;
+		if(false == proc_state->bo_is_fd_initialized)
+		{
+			//first valid sample for this process
+			proc_state->initial_num_of_fds = input->number_of_fds;
+			proc_state->bo_is_fd_initialized = true;
+		}
+		else
+		{
+			//not the first valid sample, calculate delta
+			proc_state->fd_delta = input->number_of_fds - proc_state->initial_num_of_fds;
+		}
 	}
 }
 

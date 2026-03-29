@@ -90,6 +90,7 @@ static process_state_input_t make_sample_with_fds(
         write_kb,
         threads);
 
+    s.bo_is_fd_valid = true;
     s.number_of_fds = number_of_fds;
     return s;
 }
@@ -354,6 +355,33 @@ void test_fd_metrics_track_initial_current_and_delta(void)
     TEST_ASSERT_EQUAL(-2, list->fd_delta);
 }
 
+void test_fd_metrics_ignore_invalid_sample_until_first_valid_one(void)
+{
+    process_state_input_t s1 = make_sample(701, 10, 5, 1000, 0, 0, 1);
+    process_state_input_t s2 = make_sample_with_fds(701, 11, 5, 1000, 0, 0, 1, 4);
+    process_state_input_t s3 = make_sample_with_fds(701, 12, 5, 1000, 0, 0, 1, 8);
+
+    s1.bo_is_fd_valid = false;
+    s1.number_of_fds = 0;
+
+    process_stats_update(&s1);
+    process_stats_snapshot_end();
+
+    process_stats_update(&s2);
+    process_stats_snapshot_end();
+
+    process_stats_update(&s3);
+    process_stats_snapshot_end();
+
+    process_state_t *list = process_stats_get_all();
+
+    TEST_ASSERT_NOT_NULL(list);
+    TEST_ASSERT_TRUE(list->bo_is_fd_initialized);
+    TEST_ASSERT_EQUAL(4, list->initial_num_of_fds);
+    TEST_ASSERT_EQUAL(8, list->current_num_of_fds);
+    TEST_ASSERT_EQUAL(4, list->fd_delta);
+}
+
 
 /* -------------------------------------------------
  * Main
@@ -370,6 +398,7 @@ int main(void)
     RUN_TEST(test_invalid_rss_ignored);
     RUN_TEST(test_invalid_io_ignored);
     RUN_TEST(test_fd_metrics_track_initial_current_and_delta);
+    RUN_TEST(test_fd_metrics_ignore_invalid_sample_until_first_valid_one);
 
     return UNITY_END();
 }

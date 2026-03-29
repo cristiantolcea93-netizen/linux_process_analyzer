@@ -49,7 +49,7 @@ static void print_usage(const char *prog)
 	printf("  -a  --write_rate <N>        Display N processes with the highest disk write rate (KB/s)\n");
 	printf("  -p  --opened_fds <N>        Display N processes with the highest number of opened file descriptors\n");
 	printf("  -m  --fds_increase <N>      Display N processes with the highest increase in opened file descriptors\n");
-	printf("  -o  --fds_delta <N>         Display N processes with the highest increase in opened file descriptors\n");
+	printf("  -o  --fds_delta <N>         Display N processes with the highest absolute delta in opened file descriptors\n");
 	printf("  -k  --filter_by_pid <pid>   Comma-separated list of PIDs. If not provided all running processes are included\n");
 	printf("  -l  --filter_by_name <name> Comma-separated list of process names.If not provided all running processes are included\n");
 	printf("  -j  --delete_old_files      Delete the files stored during previous executions\n");

@@ -354,6 +354,55 @@ void test_count_open_fds_for_pid_handles_permission_denied(void)
     g_mock_opendir_errno = 0;
 }
 
+void test_read_fd_sets_valid_flag_and_fd_count(void)
+{
+    const pid_t pid = 6161;
+    char path[512];
+    process_state_input_t process_data;
+
+    memset(&process_data, 0, sizeof(process_data));
+    process_data.pid = pid;
+
+    create_fd_fixture(pid);
+
+    snprintf(path, sizeof(path), "%s/%d/fd/0", TEST_PROC_ROOT, pid);
+    create_empty_file(path);
+
+    snprintf(path, sizeof(path), "%s/%d/fd/1", TEST_PROC_ROOT, pid);
+    create_empty_file(path);
+
+    read_fd(&process_data);
+
+    TEST_ASSERT_TRUE(process_data.bo_is_fd_valid);
+    TEST_ASSERT_EQUAL(2, process_data.number_of_fds);
+}
+
+void test_read_fd_clears_value_when_directory_cannot_be_read(void)
+{
+    const pid_t pid = 7171;
+    char path[512];
+    process_state_input_t process_data;
+
+    memset(&process_data, 0, sizeof(process_data));
+    process_data.pid = pid;
+    process_data.number_of_fds = 99;
+    process_data.bo_is_fd_valid = true;
+
+    create_fd_fixture(pid);
+
+    snprintf(path, sizeof(path), "%s/%d/fd", TEST_PROC_ROOT, pid);
+    g_mock_opendir_path = path;
+    g_mock_opendir_errno = EACCES;
+
+    read_fd(&process_data);
+
+    TEST_ASSERT_FALSE(process_data.bo_is_fd_valid);
+    TEST_ASSERT_EQUAL(0, process_data.number_of_fds);
+
+    g_mock_opendir_path = NULL;
+    g_mock_opendir_errno = 0;
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -368,9 +417,10 @@ int main(void)
     RUN_TEST(test_count_open_fds_for_pid_returns_correct_count);
     RUN_TEST(test_count_open_fds_for_pid_returns_minus_one_for_invalid_pid);
     RUN_TEST(test_count_open_fds_for_pid_handles_permission_denied);
+    RUN_TEST(test_read_fd_sets_valid_flag_and_fd_count);
+    RUN_TEST(test_read_fd_clears_value_when_directory_cannot_be_read);
 
     return UNITY_END();
 }
-
 
 

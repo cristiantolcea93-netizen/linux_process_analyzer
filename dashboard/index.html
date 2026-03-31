@@ -412,11 +412,39 @@ body.light-mode .chart-card {
             <canvas id="writeRateChart"></canvas>
         </div>
     </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span class="chart-title">FD Increase</span>
+                <span class="chart-badge">Count</span>
+            </div>
+            <canvas id="fdsIncreaseChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span class="chart-title">FD Delta</span>
+                <span class="chart-badge">Count</span>
+            </div>
+            <canvas id="fdsDeltaChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span class="chart-title">Open FDs</span>
+                <span class="chart-badge">Count</span>
+            </div>
+            <canvas id="fdsOpenedChart"></canvas>
+        </div>
+    </div>
 </main>
 
 <script>
 let cpuChart, rssChart, readRateChart, writeRateChart;
 let rssIncreaseChart, rssDeltaChart, kbytesReadChart, kbytesWrittenChart;
+let fdsIncreaseChart, fdsOpenedChart, fdsDeltaChart;
 
 document.getElementById("fileInput").addEventListener("change", loadFile);
 
@@ -462,54 +490,9 @@ function renderDashboard(data) {
     renderRSSDelta(data.metrics.rss_delta || []);
     renderKbytesRead(data.metrics.kbytes_read || []);
     renderKbytesWritten(data.metrics.written_kbytes || []);
-}
-
-function toggleDarkMode() {
-    const isDark = document.body.classList.toggle("dark-mode");
-    localStorage.setItem("darkMode", isDark ? "enabled" : "disabled");
-    document.getElementById("darkModeBtn").textContent = isDark ? "Light Mode" : "Dark Mode";
-    updateChartColors(isDark);
-}
-
-function updateChartColors(isDark) {
-    const textColor = isDark ? "#fff" : "#666";
-    const gridColor = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
-    const tooltipBg = isDark ? "#333" : "rgba(0,0,0,0.8)";
-    const charts = [cpuChart, rssChart, readRateChart, writeRateChart, rssIncreaseChart, rssDeltaChart, kbytesReadChart, kbytesWrittenChart];
-    charts.forEach(chart => {
-        if (chart) {
-            if (chart.options.scales?.x) {
-                chart.options.scales.x.ticks = { color: textColor };
-                chart.options.scales.x.grid = { color: gridColor };
-            }
-            if (chart.options.scales?.y) {
-                chart.options.scales.y.ticks = { color: textColor };
-                chart.options.scales.y.grid = { color: gridColor };
-            }
-            if (chart.options.plugins?.legend?.labels) {
-                chart.options.plugins.legend.labels.color = textColor;
-            }
-            if (chart.options.plugins?.tooltip) {
-                chart.options.plugins.tooltip.titleColor = textColor;
-                chart.options.plugins.tooltip.bodyColor = textColor;
-                chart.options.plugins.tooltip.backgroundColor = tooltipBg;
-            }
-            chart.update();
-        }
-    });
-}
-
-function isDarkMode() {
-    return document.body.classList.contains("dark-mode");
-}
-
-function loadDarkModePreference() {
-    const preference = localStorage.getItem("darkMode");
-    if (preference === "enabled") {
-        document.body.classList.add("dark-mode");
-        document.getElementById("darkModeBtn").textContent = "Light Mode";
-        setTimeout(() => updateChartColors(true), 100);
-    }
+    fdsIncrease(data.metrics.fds_increase || []);
+    fdsOpened(data.metrics.opened_fds || []);
+    fdsDelta(data.metrics.fds_delta || []);
 }
 
 function renderMeta(meta) {
@@ -648,6 +631,24 @@ function renderKbytesWritten(list) {
     kbytesWrittenChart = makeChart("kbytesWrittenChart", list, "Disk Write (KB)", l => l.map(p => p.written_bytes_kb), "#38bdf8", "write");
 }
 
+function fdsIncrease(list) {
+    if (!list.length) return;
+    if (fdsIncreaseChart) fdsIncreaseChart.destroy();
+    fdsIncreaseChart = makeChart("fdsIncreaseChart", list, "FD Increase", l => l.map(p => p.no_of_fds_increase), "#2dd4a0", "fds");
+}
+
+function fdsOpened(list) {
+    if (!list.length) return;
+    if (fdsOpenedChart) fdsOpenedChart.destroy();
+    fdsOpenedChart = makeChart("fdsOpenedChart", list, "FD Open", l => l.map(p => p.no_of_opened_fds), "#9b6dff", "fds");
+}
+
+function fdsDelta(list) {
+    if (!list.length) return;
+    if (fdsDeltaChart) fdsDeltaChart.destroy();
+    fdsDeltaChart = makeChart("fdsDeltaChart", list, "FD Delta", l => l.map(p => p.fds_delta), "#f75f5f", "fds");
+}
+
 window.addEventListener("load", () => {
     if (localStorage.getItem("theme") === "light") {
         document.body.classList.add("light-mode");
@@ -657,7 +658,6 @@ window.addEventListener("load", () => {
     if (saved) {
         try { renderDashboard(JSON.parse(saved)); } catch {}
     }
-    loadFile();
 });
 </script>
 </body>

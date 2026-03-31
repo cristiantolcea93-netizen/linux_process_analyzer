@@ -291,6 +291,7 @@ body.light-mode select {
                 <option value="read">Read KB</option>
                 <option value="write">Write KB</option>
                 <option value="threads">Threads</option>
+                <option value="fds">FDs</option>
             </select>
         </div>
     </div>
@@ -314,7 +315,8 @@ const metricLabels = {
     cpu: "CPU Time",
     read: "Read KB",
     write: "Write KB",
-    threads: "Threads"
+    threads: "Threads",
+    fds: "FDs (Open)"
 };
 
 function toggleLightMode() {
@@ -363,11 +365,12 @@ function extractSeries(list, metric) {
     return list.flatMap(r => {
         let val = null;
         switch (metric) {
-            case "rss":   if (r.rss_kb >= 0) val = r.rss_kb / 1024; break;
-            case "cpu":   val = r.utime + r.stime; break;
-            case "read":  if (r.io_read_kb >= 0) val = r.io_read_kb; break;
-            case "write": if (r.io_write_kb >= 0) val = r.io_write_kb; break;
-            case "threads": val = r.threads; break;
+            case "rss":         if (r.rss_kb >= 0) val = r.rss_kb / 1024; break;
+            case "cpu":         val = r.utime + r.stime; break;
+            case "read":        if (r.io_read_kb >= 0) val = r.io_read_kb; break;
+            case "write":       if (r.io_write_kb >= 0) val = r.io_write_kb; break;
+            case "threads":     val = r.threads; break;
+            case "fds":         if (r.fds >= 0) val = r.fds; break;
         }
         return val !== null ? [{ x: new Date(r.timestamp.replace(" ", "T")), y: val }] : [];
     });

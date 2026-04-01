@@ -239,13 +239,58 @@ body.light-mode select {
     background: var(--bg-hover);
 }
 
+/* scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── TOAST ── */
+#toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 999;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    opacity: 0;
+    pointer-events: none;
+}
+#toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+#toast .toast-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+#toast.loading .toast-dot {
+    background: var(--accent-yellow, #f0b429);
+    animation: pulse 1s infinite;
+}
+#toast.success .toast-dot { background: var(--accent-green, #2dd4a0); }
+#toast.error .toast-dot { background: var(--accent-red, #f75f5f); }
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
 </style>
 </head>
 
 <body>
+
+<div id="toast"><div class="toast-dot"></div><span id="toastMsg"></span></div>
 
 <!-- SIDEBAR -->
 <nav id="sidebar">
@@ -291,7 +336,7 @@ body.light-mode select {
                 <option value="read">Read KB</option>
                 <option value="write">Write KB</option>
                 <option value="threads">Threads</option>
-                <option value="fds">FDs</option>
+                <option value="fds">FDs (Open)</option>
             </select>
         </div>
     </div>
@@ -318,6 +363,15 @@ const metricLabels = {
     threads: "Threads",
     fds: "FDs (Open)"
 };
+
+let toastTimer = null;
+function showToast(msg, type, duration = 3000) {
+    const toast = document.getElementById("toast");
+    document.getElementById("toastMsg").textContent = msg;
+    toast.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    if (duration) toastTimer = setTimeout(() => { toast.className = type; }, duration);
+}
 
 function toggleLightMode() {
     document.body.classList.toggle("light-mode");
@@ -468,23 +522,34 @@ document.getElementById("metricSelect").addEventListener("change", updateChart);
 function loadFile(e) {
     const file = e.target.files[0];
     if (!file) return;
+    showToast(`Loading ${file.name}…`, "loading", 0);
     const reader = new FileReader();
     reader.onload = function(ev) {
-        const text = ev.target.result;
-        localStorage.setItem("lastRecords", text);
-        const records = parseJSONL(text);
-        pidMap = groupByPID(records);
-        populatePIDSelect(pidMap);
-        const pidFromURL = getPIDFromURL();
-        if (pidFromURL && pidMap[pidFromURL]) {
-            document.getElementById("pidSelect").value = pidFromURL;
+        try {
+            const text = ev.target.result;
+            if (text.length < 4 * 1024 * 1024) {
+                try { localStorage.setItem("lastRecords", text); } catch {}
+            } else {
+                localStorage.removeItem("lastRecords");
+            }
+            const records = parseJSONL(text);
+            pidMap = groupByPID(records);
+            populatePIDSelect(pidMap);
+            const pidFromURL = getPIDFromURL();
+            if (pidFromURL && pidMap[pidFromURL]) {
+                document.getElementById("pidSelect").value = pidFromURL;
+            }
+            const metricFromURL = getMetricFromURL();
+            if (metricFromURL) {
+                document.getElementById("metricSelect").value = metricFromURL;
+            }
+            updateChart();
+            showToast(`Loaded ${file.name}`, "success");
+        } catch {
+            showToast("Failed to parse file", "error");
         }
-        const metricFromURL = getMetricFromURL();
-        if (metricFromURL) {
-            document.getElementById("metricSelect").value = metricFromURL;
-        }
-        updateChart();
     };
+    reader.onerror = () => showToast("Failed to read file", "error");
     reader.readAsText(file);
 }
 

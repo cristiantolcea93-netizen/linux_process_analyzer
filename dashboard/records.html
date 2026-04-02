@@ -189,6 +189,10 @@ select {
     transition: border-color 0.15s;
 }
 select:hover, select:focus { border-color: var(--accent-blue); }
+select:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
 
 /* ── CHART CARD ── */
 .chart-card {
@@ -356,53 +360,266 @@ window.name = "pa_timeline";
 
 let pidMap = {};
 let timelineChart = null;
+let pidSeriesCache = new Map();
+let sharedFile = null;
+let sharedFileName = null;
+let sharedFileSignature = null;
+let prepareTask = null;
+let seriesTask = null;
+
+const recordsWorkerURL = URL.createObjectURL(new Blob([`
+const CHUNK_SIZE = 8 * 1024 * 1024;
+const PROGRESS_STEP = 32 * 1024 * 1024;
+
+self.onmessage = function(event) {
+    const { type, file, pid } = event.data;
+
+    try {
+        if (!(file instanceof Blob)) {
+            throw new Error("No file provided");
+        }
+
+        if (type === "prepare") {
+            self.postMessage({ type: "prepare-complete", result: prepareFile(file, pid) });
+            return;
+        }
+
+        if (type === "series") {
+            self.postMessage({ type: "series-complete", result: buildPidSeries(file, pid) });
+            return;
+        }
+
+        throw new Error("Unknown job type");
+    } catch (error) {
+        self.postMessage({
+            type: "error",
+            message: error && error.message ? error.message : "Processing failed"
+        });
+    }
+};
+
+function createEmptySeries() {
+    return {
+        rss: [],
+        cpu: [],
+        read: [],
+        write: [],
+        threads: [],
+        fds: []
+    };
+}
+
+function prepareFile(file, requestedPid) {
+    const entries = new Map();
+    const requested = normalizePid(requestedPid);
+    let firstPid = null;
+    let minPid = Number.POSITIVE_INFINITY;
+    let initialPid = requested;
+    let initialComm = "";
+    const initialSeries = createEmptySeries();
+
+    scanFile(file, "prepare", line => {
+        const pid = extractInteger(line, "pid");
+        if (pid === null) return;
+
+        if (pid < minPid) minPid = pid;
+
+        const comm = extractString(line, "comm") || "";
+        if (!entries.has(pid)) {
+            entries.set(pid, comm);
+            if (firstPid === null) {
+                firstPid = pid;
+                if (initialPid === null) initialPid = pid;
+            }
+        }
+
+        if (initialPid !== null && pid === initialPid) {
+            if (!initialComm) initialComm = comm;
+            collectMetricPoints(line, initialSeries);
+        }
+    });
+
+    const rows = Array.from(entries, ([pid, comm]) => ({ pid, comm })).sort((a, b) => a.pid - b.pid);
+    const hasInitialPid = initialPid !== null && entries.has(initialPid);
+    const canReuseInitialSeries = hasInitialPid && (requested !== null || initialPid === minPid);
+
+    return {
+        entries: rows,
+        initialPid: canReuseInitialSeries ? String(initialPid) : null,
+        initialComm,
+        initialSeries: canReuseInitialSeries ? initialSeries : null
+    };
+}
+
+function buildPidSeries(file, requestedPid) {
+    const pid = normalizePid(requestedPid);
+    if (pid === null) {
+        throw new Error("Invalid PID");
+    }
+
+    const series = createEmptySeries();
+    let comm = "";
+
+    scanFile(file, "series", line => {
+        if (extractInteger(line, "pid") !== pid) return;
+        if (!comm) comm = extractString(line, "comm") || "";
+        collectMetricPoints(line, series);
+    });
+
+    return { pid: String(pid), comm, series };
+}
+
+function scanFile(file, phase, onLine) {
+    const reader = new FileReaderSync();
+    let offset = 0;
+    let carry = "";
+    let lastProgress = 0;
+
+    while (offset < file.size) {
+        const nextOffset = Math.min(offset + CHUNK_SIZE, file.size);
+        const chunk = reader.readAsText(file.slice(offset, nextOffset));
+        offset = nextOffset;
+
+        const combined = carry + chunk;
+        const lines = combined.split(/\\r?\\n/);
+        carry = lines.pop() || "";
+
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i]) onLine(lines[i]);
+        }
+
+        if ((offset - lastProgress) >= PROGRESS_STEP || offset === file.size) {
+            lastProgress = offset;
+            self.postMessage({ type: "progress", phase, processed: offset, total: file.size });
+        }
+    }
+
+    if (carry.trim()) {
+        onLine(carry.trim());
+    }
+}
+
+function collectMetricPoints(line, series) {
+    const timestamp = extractString(line, "timestamp");
+    if (!timestamp) return;
+
+    const x = Date.parse(timestamp.replace(" ", "T"));
+    if (!Number.isFinite(x)) return;
+
+    const rss = extractInteger(line, "rss_kb");
+    if (rss !== null && rss >= 0) series.rss.push({ x, y: rss / 1024 });
+
+    const utime = extractInteger(line, "utime");
+    const stime = extractInteger(line, "stime");
+    if (utime !== null && stime !== null) series.cpu.push({ x, y: utime + stime });
+
+    const read = extractInteger(line, "io_read_kb");
+    if (read !== null && read >= 0) series.read.push({ x, y: read });
+
+    const write = extractInteger(line, "io_write_kb");
+    if (write !== null && write >= 0) series.write.push({ x, y: write });
+
+    const threads = extractInteger(line, "threads");
+    if (threads !== null) series.threads.push({ x, y: threads });
+
+    const fds = extractInteger(line, "fds");
+    if (fds !== null && fds >= 0) series.fds.push({ x, y: fds });
+}
+
+function normalizePid(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const pid = Number(value);
+    return Number.isInteger(pid) ? pid : null;
+}
+
+function extractInteger(line, key) {
+    const marker = '"' + key + '":';
+    let start = line.indexOf(marker);
+    if (start === -1) return null;
+
+    start += marker.length;
+    let end = start;
+
+    if (line.charCodeAt(end) === 45) end++;
+
+    while (end < line.length) {
+        const code = line.charCodeAt(end);
+        if (code < 48 || code > 57) break;
+        end++;
+    }
+
+    if (end === start || (end === start + 1 && line.charCodeAt(start) === 45)) {
+        return null;
+    }
+
+    return Number(line.slice(start, end));
+}
+
+function extractString(line, key) {
+    const marker = '"' + key + '":"';
+    let start = line.indexOf(marker);
+    if (start === -1) return null;
+
+    start += marker.length;
+    let end = start;
+    let escaped = false;
+
+    while (end < line.length) {
+        const code = line.charCodeAt(end);
+        if (escaped) {
+            escaped = false;
+            end++;
+            continue;
+        }
+
+        if (code === 92) {
+            escaped = true;
+            end++;
+            continue;
+        }
+
+        if (code === 34) break;
+        end++;
+    }
+
+    if (end >= line.length) return null;
+    return decodeJsonString(line.slice(start, end));
+}
+
+function decodeJsonString(value) {
+    return value
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\\\");
+}
+`], { type: "application/javascript" }));
 
 function openDashboard(url) {
     window.open(url, "pa_dashboard");
 }
 
 /* ── FILE SHARING via BroadcastChannel ── */
-let sharedFileText = null;
-let sharedFileName = null;
 const MY_SLOT = "timeline";
 const fileChannel = new BroadcastChannel("pa_file_share");
 
 fileChannel.onmessage = (e) => {
-    const { type, slot, text, name } = e.data;
+    const { type, slot, file, name } = e.data;
     if (slot !== MY_SLOT) return;          // ignore dashboard messages
     if (type === "file") {
-        if (text === sharedFileText) return;
-        sharedFileText = text;
-        sharedFileName = name;
-        applyFileText(text);
-        showToast(`Synced: ${name}`, "success");
+        const signature = getFileSignature(file);
+        if (!file || signature === sharedFileSignature) return;
+        applyFile(file, name || file.name, { successMessage: `Synced: ${name || file.name}` });
     } else if (type === "request") {
-        if (sharedFileText) {
-            fileChannel.postMessage({ type: "file", slot: MY_SLOT, text: sharedFileText, name: sharedFileName });
+        if (sharedFile) {
+            fileChannel.postMessage({ type: "file", slot: MY_SLOT, file: sharedFile, name: sharedFileName });
         }
     }
 };
 
 document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && !sharedFileText) {
+    if (document.visibilityState === "visible" && !sharedFile) {
         fileChannel.postMessage({ type: "request", slot: MY_SLOT });
     }
 });
-
-function applyFileText(text) {
-    const records = parseJSONL(text);
-    pidMap = groupByPID(records);
-    populatePIDSelect(pidMap);
-    const pidFromURL = getPIDFromURL();
-    if (pidFromURL && pidMap[pidFromURL]) {
-        document.getElementById("pidSelect").value = pidFromURL;
-    }
-    const metricFromURL = getMetricFromURL();
-    if (metricFromURL) {
-        document.getElementById("metricSelect").value = metricFromURL;
-    }
-    updateChart();
-}
 
 const metricLabels = {
     rss: "RSS (MB)",
@@ -438,18 +655,82 @@ function getMetricFromURL() {
     return new URLSearchParams(window.location.search).get("metric");
 }
 
-function parseJSONL(text) {
-    return text.trim().split("\n").flatMap(line => {
-        try { return [JSON.parse(line)]; } catch { return []; }
+function getFileSignature(file) {
+    if (!file) return null;
+    return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function isWorkerCancelled(error) {
+    return error && error.message === "Worker cancelled";
+}
+
+function formatProgress(processed, total) {
+    if (!total) return "0%";
+    return `${Math.round((processed / total) * 100)}%`;
+}
+
+function setControlsDisabled(disabled) {
+    document.getElementById("pidSelect").disabled = disabled;
+    document.getElementById("metricSelect").disabled = disabled;
+}
+
+function cancelTask(slot) {
+    const task = slot === "prepare" ? prepareTask : seriesTask;
+    if (!task) return;
+
+    if (slot === "prepare") prepareTask = null;
+    else seriesTask = null;
+
+    task.worker.terminate();
+    task.reject(new Error("Worker cancelled"));
+}
+
+function runWorkerJob(type, payload, onProgress, slot) {
+    cancelTask(slot);
+
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(recordsWorkerURL);
+        const task = { worker, reject };
+
+        if (slot === "prepare") prepareTask = task;
+        else seriesTask = task;
+
+        const cleanup = () => {
+            if (slot === "prepare" && prepareTask === task) prepareTask = null;
+            if (slot === "series" && seriesTask === task) seriesTask = null;
+            worker.terminate();
+        };
+
+        worker.onmessage = ({ data }) => {
+            if (data.type === "progress") {
+                if (onProgress) onProgress(data);
+                return;
+            }
+
+            cleanup();
+
+            if (data.type === "error") {
+                reject(new Error(data.message || "Processing failed"));
+                return;
+            }
+
+            resolve(data.result);
+        };
+
+        worker.onerror = () => {
+            cleanup();
+            reject(new Error("Processing failed"));
+        };
+
+        worker.postMessage({ type, ...payload });
     });
 }
 
-function groupByPID(records) {
+function buildPidMap(entries) {
     const map = {};
-    for (const r of records) {
-        if (!map[r.pid]) map[r.pid] = [];
-        map[r.pid].push(r);
-    }
+    entries.forEach(entry => {
+        map[String(entry.pid)] = { comm: entry.comm };
+    });
     return map;
 }
 
@@ -459,28 +740,17 @@ function populatePIDSelect(pidMap) {
     Object.keys(pidMap).forEach(pid => {
         const opt = document.createElement("option");
         opt.value = pid;
-        opt.text = `${pid} (${pidMap[pid][0].comm})`;
+        opt.text = `${pid} (${pidMap[pid].comm})`;
         sel.appendChild(opt);
     });
 }
 
-function extractSeries(list, metric) {
-    return list.flatMap(r => {
-        let val = null;
-        switch (metric) {
-            case "rss":         if (r.rss_kb >= 0) val = r.rss_kb / 1024; break;
-            case "cpu":         val = r.utime + r.stime; break;
-            case "read":        if (r.io_read_kb >= 0) val = r.io_read_kb; break;
-            case "write":       if (r.io_write_kb >= 0) val = r.io_write_kb; break;
-            case "threads":     val = r.threads; break;
-            case "fds":         if (r.fds >= 0) val = r.fds; break;
-        }
-        return val !== null ? [{ x: new Date(r.timestamp.replace(" ", "T")), y: val }] : [];
-    });
+function getSeriesForMetric(series, metric) {
+    return series?.[metric] || [];
 }
 
 function renderTimeline(points, pid, metric) {
-    const comm = pidMap[pid]?.[0]?.comm || "";
+    const comm = pidMap[pid]?.comm || "";
     const label = `${comm} — PID ${pid}`;
     const badge = metricLabels[metric] || metric;
 
@@ -571,31 +841,114 @@ document.getElementById("metricSelect").addEventListener("change", updateChart);
 function loadFile(e) {
     const file = e.target.files[0];
     if (!file) return;
-    showToast(`Loading ${file.name}…`, "loading", 0);
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-        try {
-            const text = ev.target.result;
-            sharedFileText = text;
-            sharedFileName = file.name;
-            fileChannel.postMessage({ type: "file", slot: MY_SLOT, text, name: file.name });
-            applyFileText(text);
-            showToast(`Loaded ${file.name}`, "success");
-        } catch {
-            showToast("Failed to parse file", "error");
-        }
-    };
-    reader.onerror = () => showToast("Failed to read file", "error");
-    reader.readAsText(file);
+    fileChannel.postMessage({ type: "file", slot: MY_SLOT, file, name: file.name });
+    applyFile(file, file.name, { successMessage: `Loaded ${file.name}` });
 }
 
-function updateChart() {
+async function applyFile(file, name, options = {}) {
+    if (!file) return;
+
+    cancelTask("prepare");
+    cancelTask("series");
+
+    sharedFile = file;
+    sharedFileName = name || file.name;
+    sharedFileSignature = getFileSignature(file);
+    pidMap = {};
+    pidSeriesCache = new Map();
+
+    if (timelineChart) {
+        timelineChart.destroy();
+        timelineChart = null;
+    }
+
+    document.getElementById("chartLabel").textContent = `Processing ${sharedFileName}...`;
+    document.getElementById("chartBadge").textContent = "Loading";
+    document.getElementById("pidSelect").innerHTML = "";
+    setControlsDisabled(true);
+
+    try {
+        const prepared = await runWorkerJob(
+            "prepare",
+            { file, pid: getPIDFromURL() },
+            progress => showToast(`Indexing ${sharedFileName}... ${formatProgress(progress.processed, progress.total)}`, "loading", 0),
+            "prepare"
+        );
+
+        pidMap = buildPidMap(prepared.entries);
+        populatePIDSelect(pidMap);
+
+        const pidSelect = document.getElementById("pidSelect");
+        const metricSelect = document.getElementById("metricSelect");
+        const pidFromURL = getPIDFromURL();
+        const metricFromURL = getMetricFromURL();
+
+        if (pidFromURL && pidMap[pidFromURL]) {
+            pidSelect.value = pidFromURL;
+        } else if (pidSelect.options.length) {
+            pidSelect.value = pidSelect.options[0].value;
+        }
+
+        if (metricFromURL && metricLabels[metricFromURL]) {
+            metricSelect.value = metricFromURL;
+        }
+
+        if (prepared.initialSeries && prepared.initialPid && pidMap[prepared.initialPid]) {
+            pidSeriesCache.set(prepared.initialPid, {
+                comm: prepared.initialComm || pidMap[prepared.initialPid].comm,
+                series: prepared.initialSeries
+            });
+        }
+
+        setControlsDisabled(false);
+        await updateChart(options);
+    } catch (error) {
+        setControlsDisabled(false);
+        if (isWorkerCancelled(error)) return;
+        showToast("Failed to process file", "error");
+    }
+}
+
+async function updateChart(options = {}) {
     const pid = document.getElementById("pidSelect").value;
     const metric = document.getElementById("metricSelect").value;
-    if (!pid || !pidMap[pid]) return;
-    const points = extractSeries(pidMap[pid], metric);
-    if (!points.length) { alert("No valid data for this metric"); return; }
+    if (!pid || !pidMap[pid] || !sharedFile) return;
+
+    let cached = pidSeriesCache.get(pid);
+
+    if (!cached) {
+        try {
+            cached = await runWorkerJob(
+                "series",
+                { file: sharedFile, pid },
+                progress => showToast(`Building timeline for PID ${pid}... ${formatProgress(progress.processed, progress.total)}`, "loading", 0),
+                "series"
+            );
+
+            cached = {
+                comm: cached.comm || pidMap[pid].comm,
+                series: cached.series
+            };
+
+            pidSeriesCache.set(pid, cached);
+        } catch (error) {
+            if (isWorkerCancelled(error)) return;
+            showToast("Failed to process timeline data", "error");
+            return;
+        }
+    }
+
+    const points = getSeriesForMetric(cached.series, metric);
+    if (!points.length) {
+        if (options.successMessage) showToast(options.successMessage, "success");
+        alert("No valid data for this metric");
+        return;
+    }
+
     renderTimeline(points, pid, metric);
+    if (options.successMessage) {
+        showToast(options.successMessage, "success");
+    }
 }
 
 window.addEventListener("load", () => {

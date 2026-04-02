@@ -224,6 +224,10 @@ body {
     margin-bottom: 16px;
 }
 
+.chart-row.single-card {
+    grid-template-columns: 1fr;
+}
+
 .chart-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -390,14 +394,14 @@ body.light-mode .chart-card {
 
     <!-- CHART ROWS -->
     <div class="chart-row">
-        <div class="chart-card">
+        <div class="chart-card" data-metric="cpu_average">
             <div class="chart-card-header">
                 <span class="chart-title">CPU Usage</span>
                 <span class="chart-badge">Average %</span>
             </div>
             <canvas id="cpuChart"></canvas>
         </div>
-        <div class="chart-card">
+        <div class="chart-card" data-metric="rss_average">
             <div class="chart-card-header">
                 <span class="chart-title">Memory (RSS)</span>
                 <span class="chart-badge">MB</span>
@@ -407,14 +411,14 @@ body.light-mode .chart-card {
     </div>
 
     <div class="chart-row">
-        <div class="chart-card">
+        <div class="chart-card" data-metric="rss_increase">
             <div class="chart-card-header">
                 <span class="chart-title">Memory Growth</span>
                 <span class="chart-badge">KB</span>
             </div>
             <canvas id="rssIncreaseChart"></canvas>
         </div>
-        <div class="chart-card">
+        <div class="chart-card" data-metric="rss_delta">
             <div class="chart-card-header">
                 <span class="chart-title">Memory Delta</span>
                 <span class="chart-badge">MB</span>
@@ -424,14 +428,14 @@ body.light-mode .chart-card {
     </div>
 
     <div class="chart-row">
-        <div class="chart-card">
+        <div class="chart-card" data-metric="kbytes_read">
             <div class="chart-card-header">
                 <span class="chart-title">Disk Read Total</span>
                 <span class="chart-badge">KB</span>
             </div>
             <canvas id="kbytesReadChart"></canvas>
         </div>
-        <div class="chart-card">
+        <div class="chart-card" data-metric="written_kbytes">
             <div class="chart-card-header">
                 <span class="chart-title">Disk Write Total</span>
                 <span class="chart-badge">KB</span>
@@ -441,14 +445,14 @@ body.light-mode .chart-card {
     </div>
 
     <div class="chart-row">
-        <div class="chart-card">
+        <div class="chart-card" data-metric="read_rate">
             <div class="chart-card-header">
                 <span class="chart-title">Disk I/O — Read Rate</span>
                 <span class="chart-badge">KB/s</span>
             </div>
             <canvas id="readRateChart"></canvas>
         </div>
-        <div class="chart-card">
+        <div class="chart-card" data-metric="write_rate">
             <div class="chart-card-header">
                 <span class="chart-title">Disk I/O — Write Rate</span>
                 <span class="chart-badge">KB/s</span>
@@ -458,14 +462,14 @@ body.light-mode .chart-card {
     </div>
 
     <div class="chart-row">
-        <div class="chart-card">
+        <div class="chart-card" data-metric="fds_increase">
             <div class="chart-card-header">
                 <span class="chart-title">FD Increase</span>
                 <span class="chart-badge">Count</span>
             </div>
             <canvas id="fdsIncreaseChart"></canvas>
         </div>
-        <div class="chart-card">
+        <div class="chart-card" data-metric="fds_delta">
             <div class="chart-card-header">
                 <span class="chart-title">FD Delta</span>
                 <span class="chart-badge">Count</span>
@@ -475,7 +479,7 @@ body.light-mode .chart-card {
     </div>
 
     <div class="chart-row">
-        <div class="chart-card">
+        <div class="chart-card" data-metric="opened_fds">
             <div class="chart-card-header">
                 <span class="chart-title">Open FDs</span>
                 <span class="chart-badge">Count</span>
@@ -583,18 +587,37 @@ function loadFile(e) {
 }
 
 function renderDashboard(data) {
+    const metrics = data.metrics || {};
     renderMeta(data.meta);
-    renderCPU(data.metrics.cpu_average || []);
-    renderRSS(data.metrics.rss_average || []);
-    renderReadRate(data.metrics.read_rate || []);
-    renderWriteRate(data.metrics.write_rate || []);
-    renderRSSIncrease(data.metrics.rss_increase || []);
-    renderRSSDelta(data.metrics.rss_delta || []);
-    renderKbytesRead(data.metrics.kbytes_read || []);
-    renderKbytesWritten(data.metrics.written_kbytes || []);
-    fdsIncrease(data.metrics.fds_increase || []);
-    fdsOpened(data.metrics.opened_fds || []);
-    fdsDelta(data.metrics.fds_delta || []);
+    updateChartVisibility(metrics);
+    renderCPU(metrics.cpu_average || []);
+    renderRSS(metrics.rss_average || []);
+    renderReadRate(metrics.read_rate || []);
+    renderWriteRate(metrics.write_rate || []);
+    renderRSSIncrease(metrics.rss_increase || []);
+    renderRSSDelta(metrics.rss_delta || []);
+    renderKbytesRead(metrics.kbytes_read || []);
+    renderKbytesWritten(metrics.written_kbytes || []);
+    fdsIncrease(metrics.fds_increase || []);
+    fdsOpened(metrics.opened_fds || []);
+    fdsDelta(metrics.fds_delta || []);
+}
+
+function hasMetricData(metrics, key) {
+    return Array.isArray(metrics[key]) && metrics[key].length > 0;
+}
+
+function updateChartVisibility(metrics) {
+    document.querySelectorAll(".chart-card[data-metric]").forEach(card => {
+        card.style.display = hasMetricData(metrics, card.dataset.metric) ? "" : "none";
+    });
+
+    document.querySelectorAll(".chart-row").forEach(row => {
+        const visibleCards = Array.from(row.querySelectorAll(".chart-card[data-metric]"))
+            .filter(card => card.style.display !== "none");
+        row.style.display = visibleCards.length ? "grid" : "none";
+        row.classList.toggle("single-card", visibleCards.length === 1);
+    });
 }
 
 function renderMeta(meta) {
@@ -686,68 +709,101 @@ function makeChart(id, list, label, valuesFn, color, metric) {
 }
 
 function renderCPU(list) {
+    if (cpuChart) {
+        cpuChart.destroy();
+        cpuChart = null;
+    }
     if (!list.length) return;
-    if (cpuChart) cpuChart.destroy();
     cpuChart = makeChart("cpuChart", list, "CPU %", l => l.map(p => p.cpu_avg_pct), "#4f8ef7", "cpu");
 }
 
 function renderRSS(list) {
+    if (rssChart) {
+        rssChart.destroy();
+        rssChart = null;
+    }
     if (!list.length) return;
-    if (rssChart) rssChart.destroy();
     rssChart = makeChart("rssChart", list, "RSS (MB)", l => l.map(p => p.rss_avg_kb / 1024), "#2dd4a0", "rss");
 }
 
 function renderReadRate(list) {
+    if (readRateChart) {
+        readRateChart.destroy();
+        readRateChart = null;
+    }
     if (!list.length) return;
-    if (readRateChart) readRateChart.destroy();
     readRateChart = makeChart("readRateChart", list, "Read KB/s", l => l.map(p => p.read_rate_kbps), "#f0b429", "read");
 }
 
 function renderWriteRate(list) {
+    if (writeRateChart) {
+        writeRateChart.destroy();
+        writeRateChart = null;
+    }
     if (!list.length) return;
-    if (writeRateChart) writeRateChart.destroy();
     writeRateChart = makeChart("writeRateChart", list, "Write KB/s", l => l.map(p => p.write_rate_kbps), "#f75f5f", "write");
 }
 
 function renderRSSIncrease(list) {
+    if (rssIncreaseChart) {
+        rssIncreaseChart.destroy();
+        rssIncreaseChart = null;
+    }
     if (!list.length) return;
-    if (rssIncreaseChart) rssIncreaseChart.destroy();
     rssIncreaseChart = makeChart("rssIncreaseChart", list, "RSS Increase (MB)", l => l.map(p => p.rss_incr_kb / 1024), "#f0b429", "rss");
 }
 
 function renderRSSDelta(list) {
+    if (rssDeltaChart) {
+        rssDeltaChart.destroy();
+        rssDeltaChart = null;
+    }
     if (!list.length) return;
-    if (rssDeltaChart) rssDeltaChart.destroy();
     rssDeltaChart = makeChart("rssDeltaChart", list, "RSS Delta (MB)", l => l.map(p => p.rss_delta_kb / 1024), "#f0b429", "rss");
 }
 
 function renderKbytesRead(list) {
+    if (kbytesReadChart) {
+        kbytesReadChart.destroy();
+        kbytesReadChart = null;
+    }
     if (!list.length) return;
-    if (kbytesReadChart) kbytesReadChart.destroy();
     kbytesReadChart = makeChart("kbytesReadChart", list, "Disk Read (KB)", l => l.map(p => p.bytes_read_kb), "#9b6dff", "read");
 }
 
 function renderKbytesWritten(list) {
+    if (kbytesWrittenChart) {
+        kbytesWrittenChart.destroy();
+        kbytesWrittenChart = null;
+    }
     if (!list.length) return;
-    if (kbytesWrittenChart) kbytesWrittenChart.destroy();
     kbytesWrittenChart = makeChart("kbytesWrittenChart", list, "Disk Write (KB)", l => l.map(p => p.written_bytes_kb), "#38bdf8", "write");
 }
 
 function fdsIncrease(list) {
+    if (fdsIncreaseChart) {
+        fdsIncreaseChart.destroy();
+        fdsIncreaseChart = null;
+    }
     if (!list.length) return;
-    if (fdsIncreaseChart) fdsIncreaseChart.destroy();
     fdsIncreaseChart = makeChart("fdsIncreaseChart", list, "FD Increase", l => l.map(p => p.no_of_fds_increase), "#2dd4a0", "fds");
 }
 
 function fdsOpened(list) {
+    if (fdsOpenedChart) {
+        fdsOpenedChart.destroy();
+        fdsOpenedChart = null;
+    }
     if (!list.length) return;
-    if (fdsOpenedChart) fdsOpenedChart.destroy();
     fdsOpenedChart = makeChart("fdsOpenedChart", list, "FD Open", l => l.map(p => p.no_of_opened_fds), "#9b6dff", "fds");
 }
 
 function fdsDelta(list) {
+    if (fdsDeltaChart) {
+        fdsDeltaChart.destroy();
+        fdsDeltaChart = null;
+    }
     if (!list.length) return;
-    if (fdsDeltaChart) fdsDeltaChart.destroy();
     fdsDeltaChart = makeChart("fdsDeltaChart", list, "FD Delta", l => l.map(p => p.fds_delta), "#f75f5f", "fds");
 }
 

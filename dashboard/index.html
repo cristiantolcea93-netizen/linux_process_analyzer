@@ -340,7 +340,7 @@ body.light-mode .chart-card {
 
     <div class="sidebar-section-label">Overview</div>
     <div class="nav-item active"><span class="icon">⊞</span> Dashboard</div>
-    <div class="nav-item" onclick="window.location.href='records.html'"><span class="icon">∿</span> Timeline</div>
+    <div class="nav-item" onclick="openTimeline('records.html')"><span class="icon">∿</span> Timeline</div>
 
     <div class="sidebar-divider"></div>
 
@@ -490,6 +490,47 @@ let cpuChart, rssChart, readRateChart, writeRateChart;
 let rssIncreaseChart, rssDeltaChart, kbytesReadChart, kbytesWrittenChart;
 let fdsIncreaseChart, fdsOpenedChart, fdsDeltaChart;
 
+window.name = "pa_dashboard";
+
+let timelineTab = null;
+
+function openTimeline(url) {
+    timelineTab = window.open(url, "pa_timeline");
+}
+
+/* ── FILE SHARING via BroadcastChannel ── */
+// Each tab owns one slot. index.html = "dashboard" (.json), records.html = "timeline" (.jsonl).
+// Messages carry a `slot` so each tab only reacts to its own slot and ignores the other.
+let sharedFileText = null;
+let sharedFileName = null;
+const MY_SLOT = "dashboard";
+const fileChannel = new BroadcastChannel("pa_file_share");
+
+fileChannel.onmessage = (e) => {
+    const { type, slot, text, name } = e.data;
+    if (slot !== MY_SLOT) return;          // ignore timeline messages
+    if (type === "file") {
+        if (text === sharedFileText) return;
+        sharedFileText = text;
+        sharedFileName = name;
+        try {
+            const json = JSON.parse(text);
+            renderDashboard(json);
+            showToast(`Synced: ${name}`, "success");
+        } catch {}
+    } else if (type === "request") {
+        if (sharedFileText) {
+            fileChannel.postMessage({ type: "file", slot: MY_SLOT, text: sharedFileText, name: sharedFileName });
+        }
+    }
+};
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !sharedFileText) {
+        fileChannel.postMessage({ type: "request", slot: MY_SLOT });
+    }
+});
+
 document.getElementById("fileInput").addEventListener("change", loadFile);
 
 function toggleLightMode() {
@@ -526,7 +567,11 @@ function loadFile(e) {
     const reader = new FileReader();
     reader.onload = function(ev) {
         try {
-            const json = JSON.parse(ev.target.result);
+            const text = ev.target.result;
+            const json = JSON.parse(text);
+            sharedFileText = text;
+            sharedFileName = file.name;
+            fileChannel.postMessage({ type: "file", slot: MY_SLOT, text, name: file.name });
             renderDashboard(json);
             showToast(`Loaded ${file.name}`, "success");
         } catch {
@@ -623,7 +668,7 @@ function chartClickHandler(list, metric) {
         const index = elements[0].index;
         const process = list[index];
         showProcessInfo(process);
-        window.location.href = `records.html?pid=${process.pid}&metric=${metric}`;
+        openTimeline(`records.html?pid=${process.pid}&metric=${metric}`);
     };
 }
 
@@ -711,6 +756,7 @@ window.addEventListener("load", () => {
         document.body.classList.add("light-mode");
         document.getElementById("themeLbl").textContent = "Dark Mode";
     }
+    fileChannel.postMessage({ type: "request", slot: MY_SLOT });
 });
 </script>
 </body>

@@ -123,7 +123,7 @@ typedef struct
 }process_state_input_t;
 
 extern void process_stats_initialize(const char* prog);
-extern void process_stats_update(process_state_input_t* input);
+extern void process_stats_update(const process_state_input_t* input);
 extern void process_stats_snapshot_end(void);
 extern void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_t interval_ms);
 extern void process_stats_deinit(void);

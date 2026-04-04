@@ -21,7 +21,7 @@ static void print_usage(const char *prog);
 static parse_args_status parse_duration_ms(const char *arg, uint64_t *out_ms);
 static parse_args_status append_filter_pid(ap_arguments *cfg, int pid);
 static parse_args_status append_filter_comm(ap_arguments *cfg, const char *comm_start, size_t comm_len);
-static void dump_whitelist_filters(ap_pid_whitelist* whitelist);
+static void dump_whitelist_filters(const ap_pid_whitelist* whitelist);
 
 typedef enum
 {
@@ -214,7 +214,7 @@ static parse_args_status append_filter_comm(ap_arguments *cfg, const char *comm_
 }
 
 
-static void dump_whitelist_filters(ap_pid_whitelist* whitelist)
+static void dump_whitelist_filters(const ap_pid_whitelist* whitelist)
 {
 #ifdef debug_whitelist
 	printf("############ White list filters - begin ###########\n");
@@ -332,12 +332,12 @@ static parse_args_status parse_filter_pid_list(const char *arg, ap_arguments *cf
 			token_end--;
 		}
 
-		size_t token_len = (size_t)(token_end - token_start);
+			if (token_start == token_end)
+			{
+				return parse_args_error;
+			}
 
-		if (token_len == 0)
-		{
-			return parse_args_error;
-		}
+			size_t token_len = (size_t)(token_end - token_start);
 
 		if (type == filter_parse_pid)
 		{

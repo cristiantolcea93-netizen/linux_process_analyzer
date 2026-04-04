@@ -639,6 +639,12 @@ function showToast(msg, type, duration = 3000) {
     if (duration) toastTimer = setTimeout(() => { toast.className = type; }, duration);
 }
 
+function hideToast() {
+    const toast = document.getElementById("toast");
+    clearTimeout(toastTimer);
+    toast.classList.remove("show");
+}
+
 function toggleLightMode() {
     document.body.classList.toggle("light-mode");
     const isLight = document.body.classList.contains("light-mode");
@@ -931,6 +937,7 @@ async function updateChart(options = {}) {
             };
 
             pidSeriesCache.set(pid, cached);
+            hideToast();
         } catch (error) {
             if (isWorkerCancelled(error)) return;
             showToast("Failed to process timeline data", "error");

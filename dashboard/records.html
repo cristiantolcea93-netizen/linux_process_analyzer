@@ -2,322 +2,971 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Process Analyzer Dashboard</title>
+<title>Process Analyzer — Records</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
 <style>
+:root {
+    --bg-base: #0d0f14;
+    --bg-surface: #151820;
+    --bg-card: #1a1e28;
+    --bg-hover: #1f2436;
+    --border: #252a38;
+    --accent-blue: #4f8ef7;
+    --accent-green: #2dd4a0;
+    --text-primary: #e8ecf4;
+    --text-secondary: #8b92a5;
+    --text-muted: #4a5168;
+    --sidebar-width: 200px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-    background: #f8f9fa;
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
 }
 
-h1 {
-    text-align: center;
+/* ── SIDEBAR ── */
+#sidebar {
+    width: var(--sidebar-width);
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0;
+    height: 100vh;
+    z-index: 100;
+    padding: 0 0 20px 0;
 }
 
-.section {
-    margin-top: 30px;
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 18px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
 }
 
-.meta-box {
-    background: white;
-    padding: 15px;
+.logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent-blue);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.sidebar-logo span {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+}
+
+.sidebar-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 12px 18px 6px;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin: 1px 8px;
     border-radius: 6px;
-    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    transition: background 0.15s, color 0.15s;
+    text-decoration: none;
 }
 
-.chart-container {
-    width: 45%;
-    display: inline-block;
-    margin: 10px;
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active {
+    background: rgba(79, 142, 247, 0.12);
+    color: var(--accent-blue);
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
+.nav-item .icon { font-size: 15px; opacity: 0.85; }
+
+.sidebar-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 10px 18px;
 }
 
-th, td {
-    padding: 8px;
-    border: 1px solid #ddd;
-    text-align: center;
+.sidebar-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin: 1px 8px;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+}
+.sidebar-action:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+#fileInput { display: none; }
+
+/* ── MAIN ── */
+#main {
+    margin-left: var(--sidebar-width);
+    flex: 1;
+    padding: 28px 28px 40px;
+    min-width: 0;
 }
 
-th {
-    background: #eee;
+.page-header {
+    margin-bottom: 24px;
+}
+.page-header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
 }
 
-body.dark-mode {
-    background: #1a1a2e;
-    color: #eee;
+/* ── CONTROLS CARD ── */
+.controls-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
 }
 
-body.dark-mode .meta-box {
-    background: #16213e;
-    box-shadow: 0 0 5px rgba(255,255,255,0.1);
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-body.dark-mode table {
-    background: #16213e;
+.control-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    white-space: nowrap;
 }
 
-body.dark-mode th, body.dark-mode td {
-    border: 1px solid #444;
+select {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+}
+select:hover, select:focus { border-color: var(--accent-blue); }
+select:disabled {
+    cursor: wait;
+    opacity: 0.65;
 }
 
-body.dark-mode th {
-    background: #0f3460;
+/* ── CHART CARD ── */
+.chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
 }
 
+.chart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chart-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-muted);
+}
+
+/* ── LIGHT MODE ── */
+body.light-mode {
+    --bg-base: #f0f2f7;
+    --bg-surface: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #f5f7fc;
+    --border: #e0e4ef;
+    --text-primary: #131722;
+    --text-secondary: #4a5168;
+    --text-muted: #8b92a5;
+}
+
+body.light-mode select {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── TOAST ── */
+#toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 999;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    opacity: 0;
+    pointer-events: none;
+}
+#toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+#toast .toast-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+#toast.loading .toast-dot {
+    background: var(--accent-yellow, #f0b429);
+    animation: pulse 1s infinite;
+}
+#toast.success .toast-dot { background: var(--accent-green, #2dd4a0); }
+#toast.error .toast-dot { background: var(--accent-red, #f75f5f); }
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
 </style>
 </head>
 
 <body>
 
-<h1>📊 Records </h1>
+<div id="toast"><div class="toast-dot"></div><span id="toastMsg"></span></div>
 
-<div class="section">
+<!-- SIDEBAR -->
+<nav id="sidebar">
+    <div class="sidebar-logo">
+        <div class="logo-icon">PA</div>
+        <span>Process Analyzer</span>
+    </div>
+
+    <div class="sidebar-section-label">Overview</div>
+    <div class="nav-item" onclick="openDashboard('index.html')"><span class="icon">⊞</span> Dashboard</div>
+    <div class="nav-item active"><span class="icon">∿</span> Timeline</div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section-label">Actions</div>
+    <div class="sidebar-action" onclick="document.getElementById('fileInput').click()">
+        <span class="icon">↑</span> Load File
+    </div>
+    <div class="sidebar-action" onclick="toggleLightMode()">
+        <span class="icon">◑</span> <span id="themeLbl">Light Mode</span>
+    </div>
 
     <input type="file" id="fileInput" accept=".jsonl">
+</nav>
 
-    <br><br>
+<!-- MAIN -->
+<main id="main">
+    <div class="page-header">
+        <h1>Timeline</h1>
+    </div>
 
-    PID:
-    <select id="pidSelect"></select>
+    <!-- CONTROLS -->
+    <div class="controls-card">
+        <div class="control-group">
+            <span class="control-label">PID</span>
+            <select id="pidSelect"></select>
+        </div>
+        <div class="control-group">
+            <span class="control-label">Metric</span>
+            <select id="metricSelect">
+                <option value="rss">RSS (MB)</option>
+                <option value="cpu">CPU Time</option>
+                <option value="read">Read KB</option>
+                <option value="write">Write KB</option>
+                <option value="threads">Threads</option>
+                <option value="fds">FDs (Open)</option>
+            </select>
+        </div>
+    </div>
 
-    Metric:
-    <select id="metricSelect">
-        <option value="rss">RSS (MB)</option>
-        <option value="cpu">CPU Time</option>
-        <option value="read">Read KB</option>
-        <option value="write">Write KB</option>
-        <option value="threads">Threads</option>
-    </select>
-
-</div>
-
-<div class="section">
-    <canvas id="timelineChart"></canvas>
-</div>
-
+    <!-- CHART -->
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <span class="chart-title" id="chartLabel">Select a file to begin</span>
+            <span class="chart-badge" id="chartBadge">—</span>
+        </div>
+        <canvas id="timelineChart"></canvas>
+    </div>
+</main>
 
 <script>
+window.name = "pa_timeline";
 
 let pidMap = {};
 let timelineChart = null;
+let pidSeriesCache = new Map();
+let sharedFile = null;
+let sharedFileName = null;
+let sharedFileSignature = null;
+let prepareTask = null;
+let seriesTask = null;
+
+const recordsWorkerURL = URL.createObjectURL(new Blob([`
+const CHUNK_SIZE = 8 * 1024 * 1024;
+const PROGRESS_STEP = 32 * 1024 * 1024;
+
+self.onmessage = function(event) {
+    const { type, file, pid } = event.data;
+
+    try {
+        if (!(file instanceof Blob)) {
+            throw new Error("No file provided");
+        }
+
+        if (type === "prepare") {
+            self.postMessage({ type: "prepare-complete", result: prepareFile(file, pid) });
+            return;
+        }
+
+        if (type === "series") {
+            self.postMessage({ type: "series-complete", result: buildPidSeries(file, pid) });
+            return;
+        }
+
+        throw new Error("Unknown job type");
+    } catch (error) {
+        self.postMessage({
+            type: "error",
+            message: error && error.message ? error.message : "Processing failed"
+        });
+    }
+};
+
+function createEmptySeries() {
+    return {
+        rss: [],
+        cpu: [],
+        read: [],
+        write: [],
+        threads: [],
+        fds: []
+    };
+}
+
+function prepareFile(file, requestedPid) {
+    const entries = new Map();
+    const requested = normalizePid(requestedPid);
+    let firstPid = null;
+    let minPid = Number.POSITIVE_INFINITY;
+    let initialPid = requested;
+    let initialComm = "";
+    const initialSeries = createEmptySeries();
+
+    scanFile(file, "prepare", line => {
+        const pid = extractInteger(line, "pid");
+        if (pid === null) return;
+
+        if (pid < minPid) minPid = pid;
+
+        const comm = extractString(line, "comm") || "";
+        if (!entries.has(pid)) {
+            entries.set(pid, comm);
+            if (firstPid === null) {
+                firstPid = pid;
+                if (initialPid === null) initialPid = pid;
+            }
+        }
+
+        if (initialPid !== null && pid === initialPid) {
+            if (!initialComm) initialComm = comm;
+            collectMetricPoints(line, initialSeries);
+        }
+    });
+
+    const rows = Array.from(entries, ([pid, comm]) => ({ pid, comm })).sort((a, b) => a.pid - b.pid);
+    const hasInitialPid = initialPid !== null && entries.has(initialPid);
+    const canReuseInitialSeries = hasInitialPid && (requested !== null || initialPid === minPid);
+
+    return {
+        entries: rows,
+        initialPid: canReuseInitialSeries ? String(initialPid) : null,
+        initialComm,
+        initialSeries: canReuseInitialSeries ? initialSeries : null
+    };
+}
+
+function buildPidSeries(file, requestedPid) {
+    const pid = normalizePid(requestedPid);
+    if (pid === null) {
+        throw new Error("Invalid PID");
+    }
+
+    const series = createEmptySeries();
+    let comm = "";
+
+    scanFile(file, "series", line => {
+        if (extractInteger(line, "pid") !== pid) return;
+        if (!comm) comm = extractString(line, "comm") || "";
+        collectMetricPoints(line, series);
+    });
+
+    return { pid: String(pid), comm, series };
+}
+
+function scanFile(file, phase, onLine) {
+    const reader = new FileReaderSync();
+    let offset = 0;
+    let carry = "";
+    let lastProgress = 0;
+
+    while (offset < file.size) {
+        const nextOffset = Math.min(offset + CHUNK_SIZE, file.size);
+        const chunk = reader.readAsText(file.slice(offset, nextOffset));
+        offset = nextOffset;
+
+        const combined = carry + chunk;
+        const lines = combined.split(/\\r?\\n/);
+        carry = lines.pop() || "";
+
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i]) onLine(lines[i]);
+        }
+
+        if ((offset - lastProgress) >= PROGRESS_STEP || offset === file.size) {
+            lastProgress = offset;
+            self.postMessage({ type: "progress", phase, processed: offset, total: file.size });
+        }
+    }
+
+    if (carry.trim()) {
+        onLine(carry.trim());
+    }
+}
+
+function collectMetricPoints(line, series) {
+    const timestamp = extractString(line, "timestamp");
+    if (!timestamp) return;
+
+    const x = Date.parse(timestamp.replace(" ", "T"));
+    if (!Number.isFinite(x)) return;
+
+    const rss = extractInteger(line, "rss_kb");
+    if (rss !== null && rss >= 0) series.rss.push({ x, y: rss / 1024 });
+
+    const utime = extractInteger(line, "utime");
+    const stime = extractInteger(line, "stime");
+    if (utime !== null && stime !== null) series.cpu.push({ x, y: utime + stime });
+
+    const read = extractInteger(line, "io_read_kb");
+    if (read !== null && read >= 0) series.read.push({ x, y: read });
+
+    const write = extractInteger(line, "io_write_kb");
+    if (write !== null && write >= 0) series.write.push({ x, y: write });
+
+    const threads = extractInteger(line, "threads");
+    if (threads !== null) series.threads.push({ x, y: threads });
+
+    const fds = extractInteger(line, "fds");
+    if (fds !== null && fds >= 0) series.fds.push({ x, y: fds });
+}
+
+function normalizePid(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const pid = Number(value);
+    return Number.isInteger(pid) ? pid : null;
+}
+
+function extractInteger(line, key) {
+    const marker = '"' + key + '":';
+    let start = line.indexOf(marker);
+    if (start === -1) return null;
+
+    start += marker.length;
+    let end = start;
+
+    if (line.charCodeAt(end) === 45) end++;
+
+    while (end < line.length) {
+        const code = line.charCodeAt(end);
+        if (code < 48 || code > 57) break;
+        end++;
+    }
+
+    if (end === start || (end === start + 1 && line.charCodeAt(start) === 45)) {
+        return null;
+    }
+
+    return Number(line.slice(start, end));
+}
+
+function extractString(line, key) {
+    const marker = '"' + key + '":"';
+    let start = line.indexOf(marker);
+    if (start === -1) return null;
+
+    start += marker.length;
+    let end = start;
+    let escaped = false;
+
+    while (end < line.length) {
+        const code = line.charCodeAt(end);
+        if (escaped) {
+            escaped = false;
+            end++;
+            continue;
+        }
+
+        if (code === 92) {
+            escaped = true;
+            end++;
+            continue;
+        }
+
+        if (code === 34) break;
+        end++;
+    }
+
+    if (end >= line.length) return null;
+    return decodeJsonString(line.slice(start, end));
+}
+
+function decodeJsonString(value) {
+    return value
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\\\");
+}
+`], { type: "application/javascript" }));
+
+function openDashboard(url) {
+    window.open(url, "pa_dashboard");
+}
+
+/* ── FILE SHARING via BroadcastChannel ── */
+const MY_SLOT = "timeline";
+const fileChannel = new BroadcastChannel("pa_file_share");
+
+fileChannel.onmessage = (e) => {
+    const { type, slot, file, name } = e.data;
+    if (slot !== MY_SLOT) return;          // ignore dashboard messages
+    if (type === "file") {
+        const signature = getFileSignature(file);
+        if (!file || signature === sharedFileSignature) return;
+        applyFile(file, name || file.name, { successMessage: `Synced: ${name || file.name}` });
+    } else if (type === "request") {
+        if (sharedFile) {
+            fileChannel.postMessage({ type: "file", slot: MY_SLOT, file: sharedFile, name: sharedFileName });
+        }
+    }
+};
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !sharedFile) {
+        fileChannel.postMessage({ type: "request", slot: MY_SLOT });
+    }
+});
+
+const metricLabels = {
+    rss: "RSS (MB)",
+    cpu: "CPU Time",
+    read: "Read KB",
+    write: "Write KB",
+    threads: "Threads",
+    fds: "FDs (Open)"
+};
+
+let toastTimer = null;
+function showToast(msg, type, duration = 3000) {
+    const toast = document.getElementById("toast");
+    document.getElementById("toastMsg").textContent = msg;
+    toast.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    if (duration) toastTimer = setTimeout(() => { toast.className = type; }, duration);
+}
+
+function hideToast() {
+    const toast = document.getElementById("toast");
+    clearTimeout(toastTimer);
+    toast.classList.remove("show");
+}
+
+function toggleLightMode() {
+    document.body.classList.toggle("light-mode");
+    const isLight = document.body.classList.contains("light-mode");
+    document.getElementById("themeLbl").textContent = isLight ? "Dark Mode" : "Light Mode";
+    localStorage.setItem("theme", isLight ? "light" : "dark");
+    updateChart();
+}
 
 function getPIDFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("pid");
+    return new URLSearchParams(window.location.search).get("pid");
 }
 
-		
-function parseJSONL(text) {
-    const lines = text.trim().split("\n");
-
-    const records = [];
-
-    for (const line of lines) {
-        try {
-            records.push(JSON.parse(line));
-        } catch {
-            // skip bad lines
-        }
-    }
-
-    return records;
+function getMetricFromURL() {
+    return new URLSearchParams(window.location.search).get("metric");
 }
 
-function groupByPID(records) {
+function getFileSignature(file) {
+    if (!file) return null;
+    return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function isWorkerCancelled(error) {
+    return error && error.message === "Worker cancelled";
+}
+
+function formatProgress(processed, total) {
+    if (!total) return "0%";
+    return `${Math.round((processed / total) * 100)}%`;
+}
+
+function setControlsDisabled(disabled) {
+    document.getElementById("pidSelect").disabled = disabled;
+    document.getElementById("metricSelect").disabled = disabled;
+}
+
+function cancelTask(slot) {
+    const task = slot === "prepare" ? prepareTask : seriesTask;
+    if (!task) return;
+
+    if (slot === "prepare") prepareTask = null;
+    else seriesTask = null;
+
+    task.worker.terminate();
+    task.reject(new Error("Worker cancelled"));
+}
+
+function runWorkerJob(type, payload, onProgress, slot) {
+    cancelTask(slot);
+
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(recordsWorkerURL);
+        const task = { worker, reject };
+
+        if (slot === "prepare") prepareTask = task;
+        else seriesTask = task;
+
+        const cleanup = () => {
+            if (slot === "prepare" && prepareTask === task) prepareTask = null;
+            if (slot === "series" && seriesTask === task) seriesTask = null;
+            worker.terminate();
+        };
+
+        worker.onmessage = ({ data }) => {
+            if (data.type === "progress") {
+                if (onProgress) onProgress(data);
+                return;
+            }
+
+            cleanup();
+
+            if (data.type === "error") {
+                reject(new Error(data.message || "Processing failed"));
+                return;
+            }
+
+            resolve(data.result);
+        };
+
+        worker.onerror = () => {
+            cleanup();
+            reject(new Error("Processing failed"));
+        };
+
+        worker.postMessage({ type, ...payload });
+    });
+}
+
+function buildPidMap(entries) {
     const map = {};
-
-    for (const r of records) {
-        if (!map[r.pid]) {
-            map[r.pid] = [];
-        }
-        map[r.pid].push(r);
-    }
-
+    entries.forEach(entry => {
+        map[String(entry.pid)] = { comm: entry.comm };
+    });
     return map;
 }
 
 function populatePIDSelect(pidMap) {
     const sel = document.getElementById("pidSelect");
     sel.innerHTML = "";
-
     Object.keys(pidMap).forEach(pid => {
         const opt = document.createElement("option");
         opt.value = pid;
-        opt.text = `${pid} (${pidMap[pid][0].comm})`;
+        opt.text = `${pid} (${pidMap[pid].comm})`;
         sel.appendChild(opt);
     });
 }
 
-function extractSeries(list, metric) {
-    const points = [];
-
-    for (const r of list) {
-        let val = null;
-
-        switch(metric) {
-            case "rss":
-                if (r.rss_kb >= 0)
-                    val = r.rss_kb / 1024;
-                break;
-
-            case "cpu":
-                val = r.utime + r.stime;
-                break;
-
-            case "read":
-                if (r.io_read_kb >= 0)
-                    val = r.io_read_kb;
-                break;
-
-            case "write":
-                if (r.io_write_kb >= 0)
-                    val = r.io_write_kb;
-                break;
-
-            case "threads":
-                val = r.threads;
-                break;
-        }
-
-        if (val !== null) {
-            points.push({
-                x: new Date(r.timestamp.replace(" ", "T")),
-                y: val
-            });
-        }
-    }
-
-    return points;
+function getSeriesForMetric(series, metric) {
+    return series?.[metric] || [];
 }
 
-function renderTimeline(points, label) {
+function renderTimeline(points, pid, metric) {
+    const comm = pidMap[pid]?.comm || "";
+    const label = `${comm} — PID ${pid}`;
+    const badge = metricLabels[metric] || metric;
 
-    if (timelineChart)
-        timelineChart.destroy();
+    document.getElementById("chartLabel").textContent = label;
+    document.getElementById("chartBadge").textContent = badge;
 
-    timelineChart = new Chart(
-        document.getElementById("timelineChart"),
-        {
-            type: "line",
-            data: {
-                datasets: [{
-                    label,
-                    data: points,
-                    borderColor: "#007bff",
-                    fill: false,
-                    tension: 0.1
-                }]
-            },
-            options: {
-                scales: {
-                    x: {
-                        type: "time",
-                        time: {
-                            unit: "second"
+    const isDark = !document.body.classList.contains("light-mode");
+    const gridColor = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)";
+    const tickColor = isDark ? "#e8ecf4" : "#131722";
+
+    if (timelineChart) timelineChart.destroy();
+
+    timelineChart = new Chart(document.getElementById("timelineChart"), {
+        type: "line",
+        data: {
+            datasets: [{
+                label: badge,
+                data: points,
+                borderColor: "#4f8ef7",
+                backgroundColor: "rgba(79,142,247,0.08)",
+                fill: true,
+                tension: 0.3,
+                pointRadius: points.length > 300 ? 0 : 2,
+                pointHoverRadius: 4,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            animation: { duration: 400 },
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: "#1a1e28",
+                    borderColor: "#252a38",
+                    borderWidth: 1,
+                    titleColor: "#e8ecf4",
+                    bodyColor: "#8b92a5",
+                    padding: 10,
+                    titleFont: { family: "'JetBrains Mono'" },
+                    bodyFont: { family: "'JetBrains Mono'" },
+                    callbacks: {
+                        title: function(items) {
+                            const d = new Date(items[0].parsed.x);
+                            const hh = String(d.getHours()).padStart(2, "0");
+                            const mm = String(d.getMinutes()).padStart(2, "0");
+                            const ss = String(d.getSeconds()).padStart(2, "0");
+                            const ms = String(d.getMilliseconds()).padStart(3, "0");
+                            return `${hh}:${mm}:${ss}.${ms}`;
                         }
                     }
                 }
+            },
+            scales: {
+                x: {
+                    type: "time",
+                    time: { unit: "second" },
+                    ticks: {
+                        color: tickColor,
+                        font: { family: "'JetBrains Mono'", size: 10 },
+                        maxTicksLimit: 8,
+                        callback: function(value, index, ticks) {
+                            const d = new Date(ticks[index].value);
+                            const hh = String(d.getHours()).padStart(2, "0");
+                            const mm = String(d.getMinutes()).padStart(2, "0");
+                            const ss = String(d.getSeconds()).padStart(2, "0");
+                            const ms = String(d.getMilliseconds()).padStart(3, "0");
+                            return `${hh}:${mm}:${ss}.${ms}`;
+                        }
+                    },
+                    grid: { color: gridColor },
+                    border: { color: "transparent" }
+                },
+                y: {
+                    ticks: { color: tickColor, font: { family: "'JetBrains Mono'", size: 10 } },
+                    grid: { color: gridColor },
+                    border: { color: "transparent" }
+                }
             }
         }
-    );
+    });
 }
 
-document.getElementById("fileInput")
-    .addEventListener("change", loadFile);
+document.getElementById("fileInput").addEventListener("change", loadFile);
+document.getElementById("pidSelect").addEventListener("change", updateChart);
+document.getElementById("metricSelect").addEventListener("change", updateChart);
 
 function loadFile(e) {
-
     const file = e.target.files[0];
     if (!file) return;
-
-    const reader = new FileReader();
-
-	reader.onload = function(ev) {
-
-	    const text = ev.target.result;
-
-	    const records = parseJSONL(text);
-
-	    pidMap = groupByPID(records);
-
-	    populatePIDSelect(pidMap);
-
-	    const pidFromURL = getPIDFromURL();
-	    if (pidFromURL && pidMap[pidFromURL]) {
-	        document.getElementById("pidSelect").value = pidFromURL;
-	    }
-
-	    updateChart();
-	};
-
-
-    reader.readAsText(file);
+    fileChannel.postMessage({ type: "file", slot: MY_SLOT, file, name: file.name });
+    applyFile(file, file.name, { successMessage: `Loaded ${file.name}` });
 }
 
-document.getElementById("pidSelect")
-    .addEventListener("change", updateChart);
+async function applyFile(file, name, options = {}) {
+    if (!file) return;
 
-document.getElementById("metricSelect")
-    .addEventListener("change", updateChart);
+    cancelTask("prepare");
+    cancelTask("series");
 
+    sharedFile = file;
+    sharedFileName = name || file.name;
+    sharedFileSignature = getFileSignature(file);
+    pidMap = {};
+    pidSeriesCache = new Map();
 
-function updateChart() {
-
-	const pid = document.getElementById("pidSelect").value;
-	const metric = document.getElementById("metricSelect").value;
-
-	if (!pid || !pidMap[pid]) return;
-
-	const list = pidMap[pid];
-
-	const points = extractSeries(list, metric);
-
-	if (points.length === 0) {
-	    alert("No valid data for this metric");
-	    return;
-	}
-
-	const label = `${list[0].comm} (PID ${pid}) - ${metric}`;
-
-	renderTimeline(points, label);
-}
-
-function loadDarkModePreference() {
-    const preference = localStorage.getItem("darkMode");
-    if (preference === "enabled") {
-        document.body.classList.add("dark-mode");
+    if (timelineChart) {
+        timelineChart.destroy();
+        timelineChart = null;
     }
-}
 
-window.addEventListener("storage", function(event) {
+    document.getElementById("chartLabel").textContent = `Processing ${sharedFileName}...`;
+    document.getElementById("chartBadge").textContent = "Loading";
+    document.getElementById("pidSelect").innerHTML = "";
+    setControlsDisabled(true);
 
-    if (event.key === "darkMode") {
+    try {
+        const prepared = await runWorkerJob(
+            "prepare",
+            { file, pid: getPIDFromURL() },
+            progress => showToast(`Indexing ${sharedFileName}... ${formatProgress(progress.processed, progress.total)}`, "loading", 0),
+            "prepare"
+        );
 
-        if (event.newValue === "enabled") {
-            document.body.classList.add("dark-mode");
-        } else {
-            document.body.classList.remove("dark-mode");
+        pidMap = buildPidMap(prepared.entries);
+        populatePIDSelect(pidMap);
+
+        const pidSelect = document.getElementById("pidSelect");
+        const metricSelect = document.getElementById("metricSelect");
+        const pidFromURL = getPIDFromURL();
+        const metricFromURL = getMetricFromURL();
+
+        if (pidFromURL && pidMap[pidFromURL]) {
+            pidSelect.value = pidFromURL;
+        } else if (pidSelect.options.length) {
+            pidSelect.value = pidSelect.options[0].value;
         }
 
+        if (metricFromURL && metricLabels[metricFromURL]) {
+            metricSelect.value = metricFromURL;
+        }
+
+        if (prepared.initialSeries && prepared.initialPid && pidMap[prepared.initialPid]) {
+            pidSeriesCache.set(prepared.initialPid, {
+                comm: prepared.initialComm || pidMap[prepared.initialPid].comm,
+                series: prepared.initialSeries
+            });
+        }
+
+        setControlsDisabled(false);
+        await updateChart(options);
+    } catch (error) {
+        setControlsDisabled(false);
+        if (isWorkerCancelled(error)) return;
+        showToast("Failed to process file", "error");
+    }
+}
+
+async function updateChart(options = {}) {
+    const pid = document.getElementById("pidSelect").value;
+    const metric = document.getElementById("metricSelect").value;
+    if (!pid || !pidMap[pid] || !sharedFile) return;
+
+    let cached = pidSeriesCache.get(pid);
+
+    if (!cached) {
+        try {
+            cached = await runWorkerJob(
+                "series",
+                { file: sharedFile, pid },
+                progress => showToast(`Building timeline for PID ${pid}... ${formatProgress(progress.processed, progress.total)}`, "loading", 0),
+                "series"
+            );
+
+            cached = {
+                comm: cached.comm || pidMap[pid].comm,
+                series: cached.series
+            };
+
+            pidSeriesCache.set(pid, cached);
+            hideToast();
+        } catch (error) {
+            if (isWorkerCancelled(error)) return;
+            showToast("Failed to process timeline data", "error");
+            return;
+        }
     }
 
+    const points = getSeriesForMetric(cached.series, metric);
+    if (!points.length) {
+        if (options.successMessage) showToast(options.successMessage, "success");
+        alert("No valid data for this metric");
+        return;
+    }
+
+    renderTimeline(points, pid, metric);
+    if (options.successMessage) {
+        showToast(options.successMessage, "success");
+    }
+}
+
+window.addEventListener("load", () => {
+    if (localStorage.getItem("theme") === "light") {
+        document.body.classList.add("light-mode");
+        document.getElementById("themeLbl").textContent = "Dark Mode";
+    }
+    // Request file from the other tab if it already has one loaded
+    fileChannel.postMessage({ type: "request", slot: MY_SLOT });
 });
-
-document.addEventListener("DOMContentLoaded", loadDarkModePreference);
-
 </script>
-
-
 
 </body>
 </html>

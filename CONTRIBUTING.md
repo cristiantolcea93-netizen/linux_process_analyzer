@@ -64,9 +64,22 @@ git checkout -b feature/my-change
 ./makeAll.sh
 ```
 - Run any available tests (recommended before PR):
-	
+		
 ```bash
 ./makeAll.sh -includeUnitTests -includeIntegrationTests
+```
+- Run static analysis before opening a PR:
+
+```bash
+cppcheck \
+    --enable=warning,style,performance \
+    --inconclusive \
+    --error-exitcode=1 \
+    --std=c11 \
+    --quiet \
+    --inline-suppr \
+    -i code/build \
+    code/
 ```
 - Commit with a clear message
 - Open a Pull Request against `main`
@@ -129,12 +142,27 @@ When adding new features:
 ## Continous Integration (CI) 
 This project uses **GitHub Actions** for CI.
 On every Pull Request and push to `main`, the following are executed:
+- `cppcheck` static code analysis
 - Full build
 - Unit tests
 - Integration tests
 
 CI must pass before a PR can be merged.
 If CI fails, the PR will not be accepted.
+
+### Static analysis in CI
+
+The `cppcheck` stage fails when unsuppressed findings are reported in the enabled categories:
+
+- `warning`
+- `style`
+- `performance`
+- `inconclusive` variants of the checks above
+
+The CI workflow excludes `code/build` from analysis to avoid warnings from generated files.
+
+For every GitHub Actions run, CI uploads a `cppcheck-report` artifact.
+If the static analysis step fails, download that artifact from the workflow run page to inspect the XML report directly.
 
 ## Coding Guidelines
 

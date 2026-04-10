@@ -82,7 +82,7 @@ bool config_get_compression_enabled(void)
 
 // ---- MOCK PROCESS STATS ----
 
-void process_stats_update(process_state_input_t* input)
+void process_stats_update(const process_state_input_t* input)
 {
     (void)input;
 }

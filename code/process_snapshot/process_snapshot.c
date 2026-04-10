@@ -44,16 +44,16 @@ static void print_timestamp(double *timestamp, char* hr_timestamp);
 static int is_numeric(const char *s);
 static int read_proc_stat(pid_t pid, process_state_input_t *proc_data);
 static off_t get_file_size(const char *path);
-static void rotate_logs(char* filePath);
+static void rotate_logs(const char* filePath);
 static void rotate_and_reopen(FILE **pf, const char *path);
 static int read_proc_io(pid_t pid, process_state_input_t *p);
 static long count_open_fds_for_pid(pid_t pid);
 static void read_fd(process_state_input_t* process_data);
 static void write_output_to_json(process_state_input_t* input);
 static process_snapshot_status acquire_lock(const char* lock_file_path);
-static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList);
-static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList);
-static bool is_filtering_enabled(ap_pid_whitelist* whiteList);
+static bool is_pid_in_filter(pid_t pid, const ap_pid_whitelist* whiteList);
+static bool is_comm_in_filter(const char *comm, const ap_pid_whitelist* whiteList);
+static bool is_filtering_enabled(const ap_pid_whitelist* whiteList);
 
 
 static process_snapshot_status acquire_lock(const char* lock_file_path)
@@ -92,12 +92,10 @@ static off_t get_file_size(const char *path)
     return st.st_size;
 }
 
-static void rotate_logs(char* filePath)
+static void rotate_logs(const char* filePath)
 {
     char old_path[PATH_MAX], new_path[PATH_MAX];
     bool compression_enabled = config_get_compression_enabled();
-    static uint32_t rotation_counter=0;
-
     int max_rotations = config_get_max_number_of_files();
 
     // remove oldest (try both)
@@ -109,10 +107,10 @@ static void rotate_logs(char* filePath)
 
     for (int i = max_rotations - 1; i >= 1; i--)
     {
-        int ret;
-
         if (compression_enabled)
         {
+            int ret;
+
             snprintf(old_path, sizeof(old_path), "%s.%d.gz", filePath, i);
             snprintf(new_path, sizeof(new_path), "%s.%d.gz", filePath, i + 1);
 
@@ -144,6 +142,8 @@ static void rotate_logs(char* filePath)
 
     if (compression_enabled)
     {
+    	static uint32_t rotation_counter = 0;
+
     	/* filename.1.time.counter => unique name required if compression is enabled to cover the
     	 * corner case when compression thread is slower than the second rotation and it tries to
     	 * compress a file which was already overwritten by the thread doing the rotation
@@ -176,7 +176,7 @@ static void rotate_and_reopen(FILE **pf, const char *path)
         *pf = NULL;
     }
 
-    rotate_logs((char*)path);
+    rotate_logs(path);
 
     *pf = fopen(path, "a");
     if (!*pf)
@@ -299,7 +299,7 @@ static int is_numeric(const char *s)
 	return 1;
 }
 
-static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList)
+static bool is_pid_in_filter(pid_t pid, const ap_pid_whitelist* whiteList)
 {
 
 	for (size_t i = 0; i < whiteList->filter_pids_count; i++)
@@ -313,7 +313,7 @@ static bool is_pid_in_filter(pid_t pid, ap_pid_whitelist* whiteList)
 	return false;
 }
 
-static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList)
+static bool is_comm_in_filter(const char *comm, const ap_pid_whitelist* whiteList)
 {
 
 	if (comm == NULL || *comm == '\0')
@@ -332,7 +332,7 @@ static bool is_comm_in_filter(const char *comm, ap_pid_whitelist* whiteList)
 	return false;
 }
 
-static bool is_filtering_enabled(ap_pid_whitelist* whiteList)
+static bool is_filtering_enabled(const ap_pid_whitelist* whiteList)
 {
 	if((whiteList->filter_comms_count == 0)&&(whiteList->filter_pids_count == 0))
 	{
@@ -348,7 +348,7 @@ static bool is_filtering_enabled(ap_pid_whitelist* whiteList)
 static long count_open_fds_for_pid(pid_t pid)
 {
 	char path[64];
-	struct dirent *entry;
+	const struct dirent *entry;
 	DIR *fd_dir;
 	unsigned long count = 0;
 
@@ -449,8 +449,8 @@ static int read_proc_stat(pid_t pid, process_state_input_t *proc_data)
 	 * pid (comm) state ppid ... utime stime ... rss
 	 */
 
-	char *lparen = strchr(buf, '(');
-	char *rparen = strrchr(buf, ')');
+	const char *lparen = strchr(buf, '(');
+	const char *rparen = strrchr(buf, ')');
 	if (!lparen || !rparen)
 		return -1;
 
@@ -605,13 +605,13 @@ static void handle_rotations(void)
 
 process_snapshot_status process_snapshot_delete_old_files(void)
 {
-	struct dirent *ent;
-
-	DIR *dir = opendir(config_get_output_dir());
-	if (dir != NULL)
+	DIR *output_dir = opendir(config_get_output_dir());
+	if (output_dir != NULL)
 	{
+		const struct dirent *ent;
+
 		/* scan the directory */
-		while ((ent = readdir(dir)) != NULL)
+		while ((ent = readdir(output_dir)) != NULL)
 		{
 			if ((strncmp(ent->d_name, CONFIG_LOG_FILE,strlen(CONFIG_LOG_FILE)) == 0) ||
 					(strncmp(ent->d_name, CONFIG_JSON_FILE,strlen(CONFIG_JSON_FILE)) == 0))
@@ -626,13 +626,13 @@ process_snapshot_status process_snapshot_delete_old_files(void)
 				}
 				else
 				{
-					closedir (dir);
+					closedir(output_dir);
 					fprintf(stderr, "process_snapshot_delete_old_files: Failed to remove old file %s\n", ent->d_name);
 					return  process_snapshot_error;
 				}
 			}
 		}
-		closedir (dir);
+		closedir(output_dir);
 	}
 	else
 	{

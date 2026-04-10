@@ -23,6 +23,7 @@ jobs:
             ninja-build \
             jq \
             stress-ng \
+            cppcheck \
             build-essential \
             zlib1g-dev
 
@@ -31,7 +32,27 @@ jobs:
           chmod +x makeAll.sh
           chmod +x make.sh
 
+      - name: Run cppcheck
+        run: |
+          cppcheck \
+            --enable=warning,style,performance \
+            --inconclusive \
+            --error-exitcode=1 \
+            --std=c11 \
+            --quiet \
+            --inline-suppr \
+            --xml \
+            --xml-version=2 \
+            -i code/build \
+            code/ 2> cppcheck-report.xml
+
+      - name: Upload cppcheck report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppcheck-report
+          path: cppcheck-report.xml
+
       - name: Run full build + tests
         run: |
           ./makeAll.sh -includeUnitTests -includeIntegrationTests
-

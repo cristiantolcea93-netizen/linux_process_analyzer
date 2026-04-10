@@ -139,8 +139,8 @@ static config_status parse_config_file(const char* path)
 
         *eq = 0;
 
-        char* key   = trim(s);
-        char* value = trim(eq + 1);
+        const char* key   = trim(s);
+        const char* value = trim(eq + 1);
 
         if (config_set_option(key, value) != 0)
         {
@@ -448,7 +448,7 @@ void config_print_banner(void)
 
 config_status config_init(void)
 {
-	char* config_file_path = getenv("PROCESS_ANALYZER_CONFIG");
+	const char* config_file_path = getenv("PROCESS_ANALYZER_CONFIG");
 
 	if(config_file_path!=NULL)
 	{

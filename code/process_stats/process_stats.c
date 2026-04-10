@@ -82,9 +82,9 @@ typedef struct {
 	const char *json_key;            // "e.g. cpu_average"
 	const char *value_key;           // "e.g. cpu_average"
 	metric_value_type_t value_type;
-	double   (*get_double)(process_state_t *);
-	int32_t  (*get_int32)(process_state_t *);
-	int64_t  (*get_int64)(process_state_t *);
+	double   (*get_double)(const process_state_t *);
+	int32_t  (*get_int32)(const process_state_t *);
+	int64_t  (*get_int64)(const process_state_t *);
 } metric_desc_t;
 
 #define PROC_STATS_SCHEMA_VERSION "1.0"
@@ -100,16 +100,16 @@ static bool boIsFirstJsonMetric;
 static long g_clock_ticks_per_second = 100;
 static long g_online_cpu_count = 1;
 
-static double get_avg_cpu(process_state_t *ps);
-static int64_t get_avg_rss(process_state_t *ps);
-static int64_t get_rss_increase(process_state_t *ps);
-static int64_t get_total_read(process_state_t *ps);
-static double get_avg_read_rate(process_state_t *ps);
-static int64_t get_total_write(process_state_t *ps);
-static double get_avg_write_rate(process_state_t *ps);
-static int64_t get_rss_delta(process_state_t *ps);
-static int32_t get_fds_delta(process_state_t *ps);
-static int64_t get_opened_fds(process_state_t *ps);
+static double get_avg_cpu(const process_state_t *ps);
+static int64_t get_avg_rss(const process_state_t *ps);
+static int64_t get_rss_increase(const process_state_t *ps);
+static int64_t get_total_read(const process_state_t *ps);
+static double get_avg_read_rate(const process_state_t *ps);
+static int64_t get_total_write(const process_state_t *ps);
+static double get_avg_write_rate(const process_state_t *ps);
+static int64_t get_rss_delta(const process_state_t *ps);
+static int32_t get_fds_delta(const process_state_t *ps);
+static int64_t get_opened_fds(const process_state_t *ps);
 
 typedef enum
 {
@@ -340,7 +340,7 @@ static int compare_fd_delta(const void *a, const void *b)
 	return 0;
 }
 
-static void calculate_io_data(process_state_input_t* input,process_state_t* proc_state)
+static void calculate_io_data(const process_state_input_t* input,process_state_t* proc_state)
 {
 	if(true == input->bo_is_io_valid)
 	{
@@ -378,7 +378,7 @@ static void calculate_io_data(process_state_input_t* input,process_state_t* proc
 
 }
 
-static void calculate_rss_data(process_state_input_t* input, process_state_t* proc_state)
+static void calculate_rss_data(const process_state_input_t* input, process_state_t* proc_state)
 {
 	if(true == input->bo_is_rss_valid)
 	{
@@ -398,7 +398,7 @@ static void calculate_rss_data(process_state_input_t* input, process_state_t* pr
 	}
 }
 
-static void calculate_fds_delta(process_state_input_t* input, process_state_t* proc_state)
+static void calculate_fds_delta(const process_state_input_t* input, process_state_t* proc_state)
 {
 	if(true == input->bo_is_fd_valid)
 	{
@@ -462,10 +462,9 @@ static char *get_hostname_alloc(void)
     max_len = HOST_NAME_MAX;
 #else
     max_len = sysconf(_SC_HOST_NAME_MAX);
-#endif
-
     if (max_len <= 0)
         max_len = 256; // fallback to 256
+#endif
 
     /* +1 for null terminator */
     size_t buf_len = (size_t)max_len + 1;
@@ -531,8 +530,6 @@ static void metrics_json_begin(
 
 static void write_metric_block_json(const metric_desc_t *m, process_state_t **arr, int n)
 {
-	int i;
-
 	if(pfJsonOutput != NULL)
 	{
 		if(false  == boIsFirstJsonMetric)
@@ -547,7 +544,7 @@ static void write_metric_block_json(const metric_desc_t *m, process_state_t **ar
 		}
 		fprintf(pfJsonOutput, "\t\t\"%s\":[\n", m->json_key);
 
-			for (i = 0; i < n; i++) {
+			for (int i = 0; i < n; i++) {
 				process_state_t *ps = arr[i];
 
 				fprintf(pfJsonOutput,
@@ -615,7 +612,7 @@ static void metrics_json_end(void)
 static double parse_timestamp_to_double(const char *ts)
 {
 	struct tm tm = {0};
-	char *ms_part;
+	const char *ms_part;
 	double seconds;
 
 	/* Parse "YYYY-MM-DD HH:MM:SS" */
@@ -649,52 +646,52 @@ static double get_snapshot_duration(const char* h_r_initial_timestamp, const cha
 	return duration_sec;
 }
 
-static double get_avg_cpu(process_state_t *ps)
+static double get_avg_cpu(const process_state_t *ps)
 {
 	return ps->average_cpu_usage;
 }
 
-static int64_t get_avg_rss(process_state_t *ps)
+static int64_t get_avg_rss(const process_state_t *ps)
 {
 	return ps->rss_average_kb;
 }
 
-static int64_t get_rss_increase(process_state_t *ps)
+static int64_t get_rss_increase(const process_state_t *ps)
 {
 	return ps->rss_variation_since_startup;
 }
 
-static int64_t get_total_read(process_state_t *ps)
+static int64_t get_total_read(const process_state_t *ps)
 {
 	return ps->total_read_kbytes;
 }
 
-static double get_avg_read_rate(process_state_t *ps)
+static double get_avg_read_rate(const process_state_t *ps)
 {
 	return ps->avg_read_rate_kb_s;
 }
 
-static int64_t get_total_write(process_state_t *ps)
+static int64_t get_total_write(const process_state_t *ps)
 {
 	return ps->total_write_kbytes;
 }
 
-static double get_avg_write_rate(process_state_t *ps)
+static double get_avg_write_rate(const process_state_t *ps)
 {
 	return ps->avg_write_rate_kb_s;
 }
 
-static int64_t get_rss_delta(process_state_t *ps)
+static int64_t get_rss_delta(const process_state_t *ps)
 {
 	return ps->rss_variation_since_startup;
 }
 
-static int32_t get_fds_delta(process_state_t *ps)
+static int32_t get_fds_delta(const process_state_t *ps)
 {
 	return ps->fd_delta;
 }
 
-static int64_t get_opened_fds(process_state_t *ps)
+static int64_t get_opened_fds(const process_state_t *ps)
 {
 	return ps->current_num_of_fds;
 }
@@ -768,6 +765,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 
 		HASH_ITER(hh, g_process_table, ps, tmp)
 		{
+			// cppcheck-suppress uninitvar
 			arr[i++] = ps;
 
 			if((true == args->cpu_average_requested) && (ps->cpu_usage_samples))
@@ -901,7 +899,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %-18lld %-8d %-15lu\n",
+					printf("%-6d %-20.20s %-6c %-18llu %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -925,7 +923,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %-18lld %-8d %-15lu\n",
+					printf("%-6d %-20.20s %-6c %-18llu %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -1023,7 +1021,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
 				for (i = 0; i < n; i++)
 				{
 					ps = arr[i];
-					printf("%-6d %-20.20s %-6c %-18ld %-8d %-15lu\n",
+					printf("%-6d %-20.20s %-6c %-18lu %-8d %-15lu\n",
 							ps->pid,
 							ps->comm,
 							ps->state,
@@ -1079,7 +1077,7 @@ void process_stats_print_metrics(process_stats_metrics_arguments * args, uint64_
  */
 
 
-void process_stats_update(process_state_input_t* input)
+void process_stats_update(const process_state_input_t* input)
 {
 	if(true == is_module_initialized)
 	{
@@ -1088,13 +1086,13 @@ void process_stats_update(process_state_input_t* input)
 		if(0 == strlen(h_r_initial_timestamp))
 		{
 			/*initial timestamp not initialized, initialize it*/
-			strncpy(h_r_initial_timestamp, input->h_r_timestamp,64);
-			strncpy(h_r_last_timestamp, input->h_r_timestamp,64);
+				snprintf(h_r_initial_timestamp, sizeof(h_r_initial_timestamp), "%s", input->h_r_timestamp);
+				snprintf(h_r_last_timestamp, sizeof(h_r_last_timestamp), "%s", input->h_r_timestamp);
 		}
 		else
 		{
 			/*save the latest timestamp*/
-			strncpy(h_r_last_timestamp, input->h_r_timestamp,64);
+				snprintf(h_r_last_timestamp, sizeof(h_r_last_timestamp), "%s", input->h_r_timestamp);
 		}
 		if(proc_state)
 		{

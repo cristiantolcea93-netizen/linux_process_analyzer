@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include "process_stats.h"
 
-#define PROCESS_ANALYZER_VERSION	"process_analyzer V1.2"
+#define PROCESS_ANALYZER_VERSION	"process_analyzer V1.3"
 
 typedef struct{
 	int*                            filter_pids;

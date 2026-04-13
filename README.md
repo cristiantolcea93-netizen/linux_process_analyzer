@@ -88,6 +88,7 @@ Full tutorial, including:
 ### Demo for the new features introduced in version 1.3
 
 Demo with a thorough presentation of the new features introduced in version 1.3: 
+
 [Watch tutorial](https://youtu.be/HYRxuTSyNH4?si=bW6RGWrLE7OxOZAI)
 
 ### CLI Usage Demo

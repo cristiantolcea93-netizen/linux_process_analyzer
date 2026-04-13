@@ -85,6 +85,12 @@ Full tutorial, including:
 
 [Watch tutorial](https://www.youtube.com/watch?v=ChIaOgrv-lM)
 
+### Demo for the new features introduced in version 1.3
+
+Demo with a thorough presentation of the new features introduced in version 1.3: 
+
+[Watch tutorial](https://youtu.be/HYRxuTSyNH4?si=bW6RGWrLE7OxOZAI)
+
 ### CLI Usage Demo
 
 A short walkthrough of `process_analyzer` running from the command line,  
